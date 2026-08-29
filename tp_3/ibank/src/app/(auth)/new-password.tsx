@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,8 +18,6 @@ import { mapAuthError } from "@/lib/error-mapper";
 import { useSession } from "@/contexts/auth-context";
 import { AuthInput } from "@/components/auth-input";
 import { AuthButton } from "@/components/auth-button";
-import { PasswordChecklist } from "@/components/password-checklist";
-import { CustomNumericKeyboard } from "@/components/custom-numeric-keyboard";
 
 export default function NewPasswordScreen() {
   const router = useRouter();
@@ -27,17 +25,12 @@ export default function NewPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-
-  const [showCustomKeyboard, setShowCustomKeyboard] = useState(false);
-  const [focusedField, setFocusedField] = useState<"password" | "confirmPassword" | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const {
     control,
     handleSubmit,
     watch,
-    setValue,
-    getValues,
-    trigger,
     formState: { errors, isValid },
   } = useForm<NewPasswordFormData>({
     resolver: zodResolver(newPasswordSchema),
@@ -49,6 +42,39 @@ export default function NewPasswordScreen() {
   });
 
   const passwordValue = watch("password");
+
+  if (isSuccess) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.flex}>
+          <View style={styles.successContainer}>
+            <Image 
+              source={require("../../../assets/images/password-success.png")} 
+              style={styles.successImage} 
+              resizeMode="contain"
+            />
+
+            <Text style={styles.successTitle}>Change password successfully!</Text>
+            <Text style={styles.successSubtitle}>
+              You have successfully change password.{"\n"}Please use the new password when Sign in.
+            </Text>
+
+            <AuthButton
+              title="Ok"
+              onPress={() => {
+                setIsNavigating(true);
+                setTimeout(() => {
+                  router.replace("/(auth)/login");
+                }, 150); // Small delay to allow the button to visually transition to the disabled state
+              }}
+              disabled={isNavigating}
+              style={{ width: "100%", marginBottom: 40 }}
+            />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!isPasswordRecovery) {
     return (
@@ -92,20 +118,6 @@ export default function NewPasswordScreen() {
     await supabase.auth.signOut();
     setLoading(false);
     setIsSuccess(true);
-  };
-
-  const handleKeyPress = (val: string) => {
-    if (!focusedField) return;
-    const current = getValues(focusedField) || "";
-    setValue(focusedField, current + val);
-    trigger(focusedField);
-  };
-
-  const handleDelete = () => {
-    if (!focusedField) return;
-    const current = getValues(focusedField) || "";
-    setValue(focusedField, current.slice(0, -1));
-    trigger(focusedField);
   };
 
   if (isSuccess) {
@@ -169,18 +181,14 @@ export default function NewPasswordScreen() {
             <Controller
               control={control}
               name="password"
-              render={({ field: { value } }) => (
+              render={({ field: { onChange, onBlur, value } }) => (
                 <AuthInput
                   label="Password"
                   placeholder="********"
                   isPassword
                   value={value}
-                  showSoftInputOnFocus={false}
-                  onFocus={() => {
-                    setFocusedField("password");
-                    setShowCustomKeyboard(true);
-                  }}
-                  onBlur={() => setShowCustomKeyboard(false)}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
                   error={errors.password?.message}
                   editable={!loading}
                 />
@@ -192,47 +200,33 @@ export default function NewPasswordScreen() {
             <Controller
               control={control}
               name="confirmPassword"
-              render={({ field: { value } }) => (
+              render={({ field: { onChange, onBlur, value } }) => (
                 <AuthInput
                   label="Confirm Password"
                   placeholder="********"
                   isPassword
                   value={value}
-                  showSoftInputOnFocus={false}
-                  onFocus={() => {
-                    setFocusedField("confirmPassword");
-                    setShowCustomKeyboard(true);
-                  }}
-                  onBlur={() => setShowCustomKeyboard(false)}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
                   error={errors.confirmPassword?.message}
                   editable={!loading}
                 />
               )}
             />
 
-            <PasswordChecklist password={passwordValue || ""} />
 
             <TouchableOpacity 
-              style={[styles.changePasswordButton, isValid ? styles.changePasswordActive : styles.changePasswordDisabled]}
+              style={[styles.changePasswordButton, (!isValid || loading) ? styles.changePasswordDisabled : styles.changePasswordActive]}
               onPress={handleSubmit(onSubmit)}
               disabled={!isValid || loading}
             >
-              <Text style={styles.changePasswordText}>Change password</Text>
+              <Text style={(!isValid || loading) ? styles.changePasswordTextDisabled : styles.changePasswordText}>
+                Change password
+              </Text>
             </TouchableOpacity>
 
           </View>
         </View>
-        
-        {/* Custom Keyboard Positioned at Bottom */}
-        {showCustomKeyboard && (
-          <View style={styles.keyboardContainer}>
-            <CustomNumericKeyboard 
-              onPress={handleKeyPress} 
-              onDelete={handleDelete}
-              initialMode="letters"
-            />
-          </View>
-        )}
       </View>
     </SafeAreaView>
   );
@@ -241,16 +235,19 @@ export default function NewPasswordScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F9F9F9", // Matches neutral background behind the card
+    backgroundColor: "#FFFFFF",
   },
   flex: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   topHeader: {
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 20,
-    backgroundColor: "#F9F9F9", // Needs to match outer background if card is floating
+    paddingTop: 24,
+    paddingBottom: 16,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
   },
   backButton: {
     flexDirection: "row",
@@ -261,24 +258,21 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 20,
     marginLeft: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   cardContainer: {
     paddingHorizontal: 24,
-    paddingTop: 10, 
+    paddingTop: 10,
     flex: 1,
   },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 15,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 32,
-    shadowColor: "#3629B7",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 30,
-    elevation: 5,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderWidth: 1,
+    borderColor: "#EBEBFE",
   },
   inputLabel: {
     fontFamily: "Poppins_600SemiBold",
@@ -299,11 +293,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   changePasswordButton: {
-    height: 48,
+    height: 44,
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 16,
+    marginTop: 8,
   },
   changePasswordDisabled: {
     backgroundColor: "#F2F1F9",
@@ -316,14 +310,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#FFFFFF",
   },
-  keyboardContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
+  changePasswordTextDisabled: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 16,
+    color: "#CBCBCB", // Readable disabled state
   },
-  
   // Error state (invalid/expired link)
   errorContainer: {
     flex: 1,
@@ -369,12 +360,12 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     alignItems: "center",
-    paddingTop: 40,
+    paddingTop: 70, // Approximates top 117px accounting for safe area
   },
   successImage: {
     width: "100%",
     height: 216,
-    marginBottom: 40,
+    marginBottom: 32, // gap from image bottom (333) to title top (365)
   },
   successTitle: {
     fontFamily: "Poppins_600SemiBold",
@@ -391,20 +382,5 @@ const styles = StyleSheet.create({
     color: "#343434",
     textAlign: "center",
     marginBottom: 40,
-  },
-  okButton: {
-    backgroundColor: "#3629B7",
-    width: "100%",
-    height: 48,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: "auto",
-    marginBottom: 40,
-  },
-  okButtonText: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 16,
-    color: "#FFFFFF",
   },
 });

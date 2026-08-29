@@ -8,7 +8,10 @@
     "scheme": "ibanktp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Permitir el uso de Face ID para iniciar sesión de forma segura y rápida en iBank."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +36,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-local-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

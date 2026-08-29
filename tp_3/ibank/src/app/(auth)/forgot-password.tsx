@@ -3,9 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,7 +19,6 @@ import { CooldownButton } from "@/components/cooldown-button";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const {
@@ -40,13 +39,23 @@ export default function ForgotPasswordScreen() {
     const data = getValues();
     const redirectUrl = Linking.createURL("reset-password");
 
-    await supabase.auth.resetPasswordForEmail(data.email, {
-      redirectTo: redirectUrl,
-    });
+    console.log("[forgot-password] redirectUrl:", redirectUrl);
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(data.email);
+
+    console.log("[forgot-password] resetError:", resetError);
 
     setLoading(false);
-    // Anti-enumeration: ALWAYS show success regardless of whether the email exists.
-    setSent(true);
+
+    if (resetError) {
+      console.error("[forgot-password] Error:", resetError.message, resetError.status);
+    }
+
+    // Navigate to OTP verification
+    router.push({
+      pathname: "/(auth)/verify-otp",
+      params: { email: data.email, type: "recovery" },
+    });
   };
 
   return (
@@ -63,8 +72,6 @@ export default function ForgotPasswordScreen() {
         {/* Floating White Card */}
         <View style={styles.cardContainer}>
           <View style={styles.card}>
-            {!sent ? (
-              // EMAIL ENTRY STATE
               <>
                 <Text style={styles.inputLabel}>Type your email address</Text>
 
@@ -95,37 +102,10 @@ export default function ForgotPasswordScreen() {
                   onPress={handleSubmit(onSubmit)}
                   cooldownSeconds={60}
                   disabled={!isValid || loading}
+                  variant="primary"
                   style={styles.sendButton}
                 />
               </>
-            ) : (
-              // SUCCESS STATE — anti-enumeration neutral message
-              <>
-                <View style={styles.successIconContainer}>
-                  <Text style={styles.successIcon}>📧</Text>
-                </View>
-
-                <Text style={styles.successTitle}>Email sent</Text>
-                <Text style={styles.successMessage}>
-                  If this email exists in our system, you will receive instructions to reset your password. Please check your inbox and spam folder.
-                </Text>
-
-                <CooldownButton
-                  title="Resend"
-                  cooldownTitle="Resend"
-                  onPress={onSubmit}
-                  cooldownSeconds={60}
-                  style={styles.resendButton}
-                />
-
-                <TouchableOpacity
-                  style={styles.backToLoginButton}
-                  onPress={() => router.replace("/(auth)/login")}
-                >
-                  <Text style={styles.backToLoginText}>Back to Sign in</Text>
-                </TouchableOpacity>
-              </>
-            )}
           </View>
         </View>
       </View>
@@ -144,8 +124,8 @@ const styles = StyleSheet.create({
   topHeader: {
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 20,
+    paddingTop: 24,
+    paddingBottom: 16,
   },
   backButton: {
     flexDirection: "row",
@@ -156,7 +136,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 20,
     marginLeft: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   cardContainer: {
     paddingHorizontal: 24,

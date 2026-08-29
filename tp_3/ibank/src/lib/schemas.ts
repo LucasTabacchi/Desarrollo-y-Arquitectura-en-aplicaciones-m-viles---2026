@@ -22,20 +22,14 @@ export const loginSchema = z.object({
   password: z.string().min(1, "La contraseña es obligatoria"),
 });
 
-export const registerSchema = z
-  .object({
-    fullName: z.string().min(1, "El nombre es obligatorio"),
-    email: emailSchema,
-    password: passwordSchema,
-    confirmPassword: z.string().min(1, "Confirmá tu contraseña"),
-    acceptTerms: z.literal(true, {
-      errorMap: () => ({ message: "Debés aceptar los términos y condiciones" }),
-    }),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Las contraseñas no coinciden",
-    path: ["confirmPassword"],
-  });
+export const registerSchema = z.object({
+  fullName: z.string().min(1, "El nombre es obligatorio"),
+  email: emailSchema,
+  password: passwordSchema,
+  acceptTerms: z.literal(true, {
+    errorMap: () => ({ message: "Debés aceptar los términos y condiciones" }),
+  }),
+});
 
 export const forgotPasswordSchema = z.object({
   email: emailSchema,

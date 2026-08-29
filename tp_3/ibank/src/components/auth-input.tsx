@@ -48,7 +48,7 @@ export function AuthInput({
             <Ionicons
               name={secureEntry ? "eye-off-outline" : "eye-outline"}
               size={20}
-              color="#CACACA"
+              color="#979797"
             />
           </TouchableOpacity>
         ) : null}
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch", // Stretches children to fill the 44px height
     backgroundColor: "transparent",
     borderRadius: 15,
     borderWidth: 1,
@@ -77,13 +77,16 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    height: "100%",
+    paddingVertical: 0, // Removes Android default padding to maximize touch area
     fontSize: 14,
     fontFamily: "Poppins_500Medium",
     color: "#343434", // Darker text for input value
   },
   toggle: {
-    padding: 8,
+    paddingHorizontal: 8,
     marginRight: -8, // adjust icon padding
+    justifyContent: "center", // Center icon vertically
   },
   errorText: {
     color: "#FF3B30",

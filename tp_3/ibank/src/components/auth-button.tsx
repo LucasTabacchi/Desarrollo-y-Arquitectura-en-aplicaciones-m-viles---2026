@@ -63,11 +63,11 @@ export function AuthButton({
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 52,
+    minHeight: 44,
   },
   primary: {
     backgroundColor: "#3629B7",
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   primaryTextDisabled: {
-    color: "#FFFFFF", // Kept white to match the Figma CSS, even though it's light bg. Wait, light bg + white text is invisible. If Primary/4 is #F2F1F9, maybe the text is gray or primary. The CSS says: /* Text/1 */ color: #FFFFFF. We'll leave it white.
+    color: "#CBCBCB", // Readable disabled state
   },
   secondaryText: {
     color: "#3629B7",

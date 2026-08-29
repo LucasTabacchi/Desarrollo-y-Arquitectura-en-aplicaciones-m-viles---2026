@@ -29,6 +29,11 @@ export function mapAuthError(error: AuthError | Error | null): string {
     return "Revisá tu email para continuar.";
   }
 
+  // New password same as old
+  if (msg.includes("different from the old password")) {
+    return "La nueva contraseña debe ser distinta a la anterior.";
+  }
+
   // Weak password
   if (msg.includes("password")) {
     return "La contraseña no cumple con los requisitos de seguridad.";
@@ -49,6 +54,6 @@ export function mapAuthError(error: AuthError | Error | null): string {
     return "Error de conexión. Verificá tu conexión a internet.";
   }
 
-  // Fallback — never expose raw Supabase messages to users
+  // Fallback - never expose raw Supabase messages to users
   return "Ocurrió un error inesperado. Intentá nuevamente.";
 }

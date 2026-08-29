@@ -8,7 +8,7 @@
 - **Tipografía**: Familia Poppins con pesos 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold). Tamaños: 24px títulos, 20px headers, 16px botones, 14px body, 12px labels/links.
 - **Border radius**: 30px para esquinas superiores de las cards, 15px para inputs y botones, 12px para banners de error.
 - **Altura de inputs**: 44px según las medidas del frame en Figma.
-- **Altura de botones**: 52px (min-height) para acciones primarias.
+- **Altura de botones**: 44px para acciones primarias, conforme al frame de Figma.
 - **Patrón de layout de cards**: Header violeta → card blanca con border radius superior (login, registro). Card blanca plana con sombra (recuperar contraseña, nueva contraseña).
 - **Ilustraciones**: Ilustraciones de login y registro extraídas como PNGs del archivo de Figma.
 
@@ -16,14 +16,17 @@
 
 - **Pantalla de recuperar contraseña**: El diseño de Figma incluye un paso de verificación por código/OTP después de solicitar el reset. La consigna establece explícitamente que el reset se hace vía deep link (sección 6.4: `resetPasswordForEmail` con `redirectTo`), no mediante ingreso de código OTP. **Seguimos la consigna** y simplificamos la pantalla a: ingreso de email → mensaje neutro de éxito → el usuario hace clic en el deep link desde su email.
 - **Pantalla de éxito de nueva contraseña**: El Figma muestra una ilustración de éxito. Usamos `password-success.png` extraída del Figma. Si la imagen no está disponible, se muestra un estado de éxito basado en texto.
-- **Teclado numérico personalizado**: El diseño de Figma muestra un teclado personalizado para las pantallas de recuperar y nueva contraseña. Como eliminamos el flujo OTP y usamos inputs de texto estándar con el teclado nativo, el componente de teclado personalizado (`custom-numeric-keyboard.tsx`) ya no se usa en la pantalla de recuperar contraseña. Se mantiene en el código para uso futuro potencial.
+- **Teclado numérico personalizado**: El diseño de Figma muestra un teclado personalizado para las pantallas de recuperar y nueva contraseña. Este componente (`custom-numeric-keyboard.tsx`) se conserva, pero por recomendación de usabilidad, se optó por el teclado numérico nativo en la nueva pantalla de OTP.
 
 ### Fuera de alcance
 
 - **Login social** (botones de Google, Facebook visibles en Figma): No implementado según la consigna sección 1.
-- **Pantalla de verificación OTP**: Presente en Figma pero explícitamente excluida en la consigna sección 1.
-- **PIN/biometría**: El ícono de huella dactilar es decorativo en la pantalla de login. No se implementó autenticación biométrica real según la consigna.
 - **Pantallas de onboarding**: Visibles en Figma pero no forman parte de las 5 pantallas requeridas.
+
+### Implementaciones Adicionales (Mejoras Híbridas)
+
+- **Pantalla de verificación OTP**: Inicialmente excluida, pero implementada posteriormente a pedido del usuario. Convive con el flujo de Deep Links.
+- **Biometría**: Implementada la autenticación con huella dactilar / FaceID en el login usando credenciales guardadas en `SecureStore`.
 
 ## Decisiones Técnicas
 

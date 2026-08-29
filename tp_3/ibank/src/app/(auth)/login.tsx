@@ -6,10 +6,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,12 +20,16 @@ import { loginSchema, LoginFormData } from "@/lib/schemas";
 import { mapAuthError } from "@/lib/error-mapper";
 import { AuthInput } from "@/components/auth-input";
 import { AuthButton } from "@/components/auth-button";
+import { useBiometrics } from "@/hooks/use-biometrics";
+import { saveCredentials, getCredentials } from "@/lib/secure-storage";
 
 export default function LoginScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+
+  const { isBiometricSupported, hasBiometricRecords, authenticate } = useBiometrics();
 
   const {
     control,
@@ -75,17 +79,55 @@ export default function LoginScreen() {
       setError(mapAuthError(authError));
       return;
     }
+
+    // Save credentials on successful manual login
+    await saveCredentials({ email: data.email, password: data.password });
+  };
+
+  const handleBiometricLogin = async () => {
+    if (!isBiometricSupported) {
+      setError("Tu dispositivo no soporta autenticación biométrica.");
+      return;
+    }
+    if (!hasBiometricRecords) {
+      setError("No tenés huellas o rostros registrados en tu dispositivo.");
+      return;
+    }
+
+    const credentials = await getCredentials();
+
+    if (!credentials || !credentials.email || !credentials.password) {
+      setError("Debes iniciar sesión con contraseña al menos una vez para usar tu huella.");
+      return;
+    }
+
+    const isSuccess = await authenticate();
+    if (!isSuccess) {
+      // User cancelled or failed
+      return;
+    }
+
+    setLoading(true);
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: credentials.email,
+      password: credentials.password,
+    });
+    setLoading(false);
+
+    if (authError) {
+      setError(mapAuthError(authError));
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
         >
           {/* Top Blue Header */}
           <View style={styles.topHeader}>
@@ -103,11 +145,11 @@ export default function LoginScreen() {
             </View>
 
             {/* Illustration */}
-            <View style={styles.illustrationContainer}>
-              <Image 
-                source={require("../../../assets/images/login-illustration.png")} 
-                style={{ width: 213, height: 165 }} 
-                resizeMode="contain" 
+            <View style={styles.illustrationContainer} pointerEvents="none">
+              <Image
+                source={require("../../../assets/images/login-illustration.png")}
+                style={{ width: 213, height: 165 }}
+                resizeMode="contain"
               />
             </View>
 
@@ -169,12 +211,12 @@ export default function LoginScreen() {
               style={styles.signInButton}
             />
 
-            <View style={styles.fingerprintContainer}>
-              <Ionicons name="finger-print" size={64} color="#3629B7" />
-            </View>
+            <TouchableOpacity style={styles.fingerprintContainer} onPress={handleBiometricLogin} disabled={loading}>
+              <Ionicons name="finger-print" size={64} color={loading ? "#A0A0A0" : "#3629B7"} />
+            </TouchableOpacity>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Text style={styles.footerText}>Don&apos;t have an account? </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
                 <Text style={styles.signUpText}>Sign Up</Text>
               </TouchableOpacity>
@@ -200,8 +242,8 @@ const styles = StyleSheet.create({
   topHeader: {
     backgroundColor: "#3629B7",
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 40,
+    paddingTop: 24,
+    paddingBottom: 16,
   },
   backButton: {
     flexDirection: "row",
@@ -212,7 +254,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 20,
     marginLeft: 8,
-    marginTop: 2, // minor alignment
+    marginTop: 4,
   },
   card: {
     flex: 1,
@@ -220,7 +262,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 24,
-    paddingTop: 32,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   cardHeader: {
@@ -240,7 +282,8 @@ const styles = StyleSheet.create({
   illustrationContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 16,
+    marginTop: 8,
+    marginBottom: 32,
   },
   errorBanner: {
     backgroundColor: "#FFEBEE",
@@ -256,7 +299,7 @@ const styles = StyleSheet.create({
   },
   forgotPasswordContainer: {
     alignItems: "flex-end",
-    marginBottom: 32,
+    marginBottom: 40,
     marginTop: -8, // pull up closer to the input
   },
   forgotPasswordText: {
@@ -265,11 +308,11 @@ const styles = StyleSheet.create({
     color: "#CACACA",
   },
   signInButton: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   fingerprintContainer: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 24,
   },
   footer: {
     flexDirection: "row",

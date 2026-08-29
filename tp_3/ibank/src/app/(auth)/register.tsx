@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-  Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,7 +21,7 @@ import { registerSchema, RegisterFormData } from "@/lib/schemas";
 import { mapAuthError } from "@/lib/error-mapper";
 import { AuthInput } from "@/components/auth-input";
 import { AuthButton } from "@/components/auth-button";
-import { PasswordChecklist } from "@/components/password-checklist";
+
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -40,12 +40,9 @@ export default function RegisterScreen() {
       fullName: "",
       email: "",
       password: "",
-      confirmPassword: "",
       acceptTerms: false as unknown as true,
     },
   });
-
-  const passwordValue = watch("password");
 
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
@@ -71,11 +68,10 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Anti-enumeration: ALWAYS navigate to pending confirmation,
-    // whether the email existed or not.
+    // Navigate to OTP verification
     router.push({
-      pathname: "/(auth)/pending-confirmation",
-      params: { email: data.email },
+      pathname: "/(auth)/verify-otp",
+      params: { email: data.email, type: "signup" },
     });
   };
 
@@ -83,17 +79,17 @@ export default function RegisterScreen() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
         >
           {/* Top Blue Header */}
           <View style={styles.topHeader}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-              <Text style={styles.headerTitle}>Sign up</Text>
+              <Text style={styles.headerTitle}>Sign Up</Text>
             </TouchableOpacity>
           </View>
 
@@ -105,11 +101,11 @@ export default function RegisterScreen() {
             </View>
 
             {/* Illustration */}
-            <View style={styles.illustrationContainer}>
-              <Image 
-                source={require("../../../assets/images/register-illustration.png")} 
-                style={{ width: 213, height: 165 }} 
-                resizeMode="contain" 
+            <View style={styles.illustrationContainer} pointerEvents="none">
+              <Image
+                source={require("../../../assets/images/register-illustration.png")}
+                style={{ width: 213, height: 165 }}
+                resizeMode="contain"
               />
             </View>
 
@@ -169,24 +165,6 @@ export default function RegisterScreen() {
               )}
             />
 
-            <PasswordChecklist password={passwordValue || ""} />
-
-            <Controller
-              control={control}
-              name="confirmPassword"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <AuthInput
-                  label="Confirm Password"
-                  placeholder="Confirm password"
-                  isPassword
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  value={value}
-                  error={errors.confirmPassword?.message}
-                  editable={!loading}
-                />
-              )}
-            />
 
             <Controller
               control={control}
@@ -244,8 +222,8 @@ const styles = StyleSheet.create({
   topHeader: {
     backgroundColor: "#3629B7",
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 40,
+    paddingTop: 24,
+    paddingBottom: 16,
   },
   backButton: {
     flexDirection: "row",
@@ -256,7 +234,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 20,
     marginLeft: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   card: {
     flex: 1,
@@ -264,7 +242,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 24,
-    paddingTop: 32,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   cardHeader: {
@@ -284,7 +262,8 @@ const styles = StyleSheet.create({
   illustrationContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 16,
+    marginTop: 8,
+    marginBottom: 32,
   },
   errorBanner: {
     backgroundColor: "#FFEBEE",
@@ -300,8 +279,8 @@ const styles = StyleSheet.create({
   },
   termsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
+    alignItems: "flex-start",
+    marginBottom: 12,
     paddingRight: 24,
   },
   checkbox: {
@@ -321,9 +300,10 @@ const styles = StyleSheet.create({
   },
   termsText: {
     fontFamily: "Poppins_400Regular",
-    fontSize: 12,
+    fontSize: 14,
+    lineHeight: 16,
     color: "#343434",
-    flex: 1, // To make text wrap
+    flex: 1,
   },
   termsLink: {
     fontFamily: "Poppins_600SemiBold",
@@ -337,13 +317,13 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   submitButton: {
-    marginTop: 16,
+    marginTop: 20,
   },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 24,
+    marginTop: 32,
   },
   footerText: {
     fontFamily: "Poppins_400Regular",
