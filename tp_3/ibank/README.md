@@ -22,6 +22,28 @@ Flujo completo de autenticación para la app bancaria iBank, conectado a Supabas
 - **`expo-router`** — Ruteo basado en archivos con typed routes
 - **`expo-secure-store`** — Disponible como dependencia pero no utilizado para almacenamiento de sesión (ver [Decisiones](#elección-de-almacenamiento-de-sesión))
 
+## Arquitectura
+
+```mermaid
+graph TD
+    subgraph Frontend [React Native / Expo]
+        UI[UI / Pantallas <br/> Expo Router]
+        AuthCtx[Auth Context <br/> Estado Global]
+        Storage[(AsyncStorage <br/> Persistencia)]
+        DeepLinks[Deep Linking <br/> expo-linking]
+    end
+
+    subgraph Backend [Supabase]
+        SupabaseAuth[Supabase Auth]
+    end
+
+    UI <-->|useAuth| AuthCtx
+    AuthCtx <-->|supabase-js| SupabaseAuth
+    AuthCtx -->|Guarda Tokens| Storage
+    Storage -->|Carga Tokens| AuthCtx
+    DeepLinks -->|Intercepta ibanktp://| AuthCtx
+```
+
 ## Primeros Pasos
 
 ### Prerrequisitos
