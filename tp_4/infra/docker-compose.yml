@@ -1,0 +1,19 @@
+services:
+  redpanda:
+    container_name: redpanda-0
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.9
+    command: ["redpanda", "start", "--overprovisioned", "--smp=1", "--memory=1G", "--reserve-memory=0M", "--node-id=0", "--check=false", "--kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092", "--advertise-kafka-addr=internal://redpanda-0:9092,external://localhost:19092"]
+    ports: ["19092:19092"]
+    healthcheck: { test: ["CMD-SHELL", "rpk cluster health --api-urls localhost:9644"], interval: 5s, timeout: 5s, retries: 20 }
+  simulator:
+    build: ../services/event-pipeline
+    command: ["node", "dist/simulator.js"]
+    environment: { KAFKA_BROKERS: "redpanda-0:9092", SIMULATOR_INTERVAL_MS: "${SIMULATOR_INTERVAL_MS:-5000}" }
+    depends_on: { redpanda: { condition: service_healthy } }
+  worker:
+    build: ../services/event-pipeline
+    environment:
+      KAFKA_BROKERS: redpanda-0:9092
+      SUPABASE_URL: ${SUPABASE_URL:-http://host.docker.internal:54321}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY in local .env}
+    depends_on: { redpanda: { condition: service_healthy } }

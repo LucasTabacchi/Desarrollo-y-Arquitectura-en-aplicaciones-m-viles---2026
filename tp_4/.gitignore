@@ -1,0 +1,28 @@
+.env
+.env.*
+*.env
+*.env.*
+!**/.env.example
+
+# Dependencies
+node_modules/
+/services/event-pipeline/node_modules/
+
+# Build artifacts
+dist/
+/services/event-pipeline/dist/
+.expo/
+web-build/
+*.tsbuildinfo
+
+# OS & Logs
+.DS_Store
+*.log
+npm-debug.*
+yarn-debug.*
+
+# Tooling & generated agent artifacts
+.atl/
+.opencode/
+graphify-out/
+
