@@ -148,13 +148,13 @@ npm test
 
 ```mermaid
 graph TB
-    subgraph ClienteMovil ["📱 Cliente Móvil (apps/agropulse)"]
+    subgraph ClienteMovil [Cliente Móvil - apps/agropulse]
         UI["Interfaz Expo / React Native<br/>(Tabs: Mapa, Lotes, Alertas, Cuenta)"]
         ColaOffline["Cola Offline<br/>(AsyncStorage)"]
         UI -->|Sin conexión| ColaOffline
     end
 
-    subgraph BaaS ["⚡ Supabase BaaS (supabase/)"]
+    subgraph BaaS [Supabase BaaS - supabase/]
         Auth["Supabase Auth<br/>(JWT y Sesiones)"]
         Realtime["Supabase Realtime<br/>(WebSocket CDC)"]
         Postgres[("Base de Datos PostgreSQL<br/>+ PostGIS y Políticas RLS")]
@@ -162,25 +162,25 @@ graph TB
         Postgres -->|Cambios en vivo| Realtime
     end
 
-    subgraph BackendEventos ["⚙️ Ingesta y Procesamiento (services/event-pipeline)"]
+    subgraph BackendEventos [Ingesta y Procesamiento - services/event-pipeline]
         Simulador["Simulador IoT<br/>(simulator.ts)"]
         Worker["Worker de Ingesta y Comandos<br/>(worker.ts)"]
     end
 
-    subgraph Broker ["📨 Bus de Streaming (infra/)"]
-        Redpanda[("Broker Redpanda / Kafka<br/>Tópicos: soil.moisture | weather.tick")]
+    subgraph Broker [Bus de Streaming - infra/]
+        Redpanda[("Broker Redpanda / Kafka<br/>Tópicos: soil.moisture / weather.tick")]
     end
 
     %% Interacciones
     UI -->|1. Inicio de sesión / Sesión persistente| Auth
-    UI -->|2. Consultas y comandos REST (RLS)| Postgres
+    UI -->|"2. Consultas y comandos REST (RLS)"| Postgres
     ColaOffline -.->|Sincronización al recuperar red| Postgres
-    Realtime ==>|3. Actualizaciones en tiempo real (lecturas, válvulas, alertas)| UI
+    Realtime -->|"3. Actualizaciones en tiempo real (lecturas, válvulas, alertas)"| UI
 
     Simulador -->|Publica telemetría cada 3-8s| Redpanda
     Redpanda -->|Consume eventos| Worker
-    Worker -->|Inserta lecturas y alertas (Service Role)| Postgres
-    Worker -->|Ejecuta comandos pendientes (Función atómica SQL)| Postgres
+    Worker -->|"Inserta lecturas y alertas (Service Role)"| Postgres
+    Worker -->|"Ejecuta comandos pendientes (Función atómica SQL)"| Postgres
 ```
 
 ### Decisión de Arquitectura: Sin Kafka en el Dispositivo Móvil
