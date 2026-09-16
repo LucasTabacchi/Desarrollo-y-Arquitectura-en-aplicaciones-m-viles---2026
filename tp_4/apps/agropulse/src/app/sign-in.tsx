@@ -38,39 +38,31 @@ export default function SignInScreen() {
   }
 
   return (
-    <ImageBackground
-      source={require('../../assets/images/login-bg.jpg')}
-      style={styles.background}
-      resizeMode="cover"
-    >
-      <View style={styles.overlay} />
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardContainer}
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardContainer}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.card}>
-              <View style={styles.brandRow}>
-                <View style={styles.brandMark}>
-                  <Ionicons name="leaf-outline" color="#d9e878" size={24} />
-                </View>
-                <View style={styles.brandTag}>
-                  <Text style={styles.eyebrow}>AGROPULSE</Text>
-                  <Text style={styles.tagline}>PRECISION IOT</Text>
-                </View>
+          <View style={styles.container}>
+            {/* Brand Logo / Title */}
+            <View style={styles.brandHeader}>
+              <View style={styles.brandEmblem}>
+                <Ionicons name="leaf" color="#22c55e" size={32} />
               </View>
+              <Text style={styles.brandTitle}>AgroPulse</Text>
+              <Text style={styles.brandSubtitle}>Agricultura de Precisión</Text>
+            </View>
 
-              <Text style={styles.title}>Operaciones a campo, con precisión.</Text>
-              <Text style={styles.subtitle}>Iniciá sesión para ver las organizaciones y lotes que gestionás.</Text>
-
-              <Text style={styles.label}>Correo electrónico</Text>
+            {/* Login Card */}
+            <View style={styles.card}>
+              <Text style={styles.label}>Correo Electrónico</Text>
               <View style={styles.inputShell}>
-                <Ionicons name="mail-outline" color="#94a89d" size={19} />
+                <Ionicons name="mail-outline" color="#86948a" size={19} />
                 <TextInput
                   accessibilityLabel="Correo electrónico"
                   autoCapitalize="none"
@@ -78,7 +70,7 @@ export default function SignInScreen() {
                   keyboardType="email-address"
                   onChangeText={setEmail}
                   placeholder="productor@agropulse.test"
-                  placeholderTextColor="#71877b"
+                  placeholderTextColor="#5a6860"
                   style={styles.input}
                   value={email}
                 />
@@ -86,14 +78,14 @@ export default function SignInScreen() {
 
               <Text style={styles.label}>Contraseña</Text>
               <View style={styles.inputShell}>
-                <Ionicons name="lock-closed-outline" color="#94a89d" size={19} />
+                <Ionicons name="lock-closed-outline" color="#86948a" size={19} />
                 <TextInput
                   accessibilityLabel="Contraseña"
                   autoCapitalize="none"
                   autoComplete="password"
                   onChangeText={setPassword}
                   placeholder="Tu contraseña"
-                  placeholderTextColor="#71877b"
+                  placeholderTextColor="#5a6860"
                   secureTextEntry
                   style={styles.input}
                   value={password}
@@ -109,35 +101,28 @@ export default function SignInScreen() {
                 style={({ pressed }) => [styles.button, pressed && styles.pressed, isSubmitting && styles.disabled]}
               >
                 {isSubmitting ? (
-                  <ActivityIndicator color="#10251d" />
+                  <ActivityIndicator color="#003824" />
                 ) : (
                   <View style={styles.buttonContent}>
                     <Text style={styles.buttonText}>Iniciar sesión</Text>
-                    <Ionicons name="arrow-forward" color="#10251d" size={19} />
+                    <Ionicons name="arrow-forward" color="#003824" size={19} />
                   </View>
                 )}
               </Pressable>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </ImageBackground>
+
+            <Text style={styles.footerNote}>Estancia Didáctica Concordia • Sistema AgroPulse</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#071b13',
-  },
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(7, 27, 19, 0.62)',
-  },
   safeArea: {
     flex: 1,
+    backgroundColor: '#0f1512',
   },
   keyboardContainer: {
     flex: 1,
@@ -145,104 +130,95 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 22,
+    padding: 24,
   },
-  card: {
-    backgroundColor: 'rgba(13, 35, 25, 0.88)',
-    borderColor: 'rgba(217, 232, 120, 0.28)',
-    borderRadius: 30,
-    borderWidth: 1.5,
-    elevation: 12,
-    gap: 10,
-    padding: 26,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.45,
-    shadowRadius: 28,
+  container: {
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+    gap: 20,
   },
-  brandRow: {
+  brandHeader: {
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
+    gap: 6,
     marginBottom: 4,
   },
-  brandMark: {
-    alignItems: 'center',
-    backgroundColor: '#1b3f2f',
-    borderColor: 'rgba(217, 232, 120, 0.3)',
-    borderRadius: 16,
+  brandEmblem: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderColor: 'rgba(34, 197, 94, 0.3)',
     borderWidth: 1,
-    height: 48,
+    alignItems: 'center',
     justifyContent: 'center',
-    width: 48,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 6,
   },
-  brandTag: {
-    gap: 1,
-  },
-  eyebrow: {
-    color: '#d9e878',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  tagline: {
-    color: '#8fa597',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: '#f8f3e8',
-    fontSize: 28,
-    fontWeight: '900',
+  brandTitle: {
+    color: '#ffffff',
+    fontSize: 26,
+    fontWeight: '800',
     letterSpacing: -0.5,
-    lineHeight: 34,
-    marginTop: 6,
   },
-  subtitle: {
-    color: '#a8bfae',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
+  brandSubtitle: {
+    color: '#86948a',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  card: {
+    backgroundColor: '#171d1a',
+    borderColor: 'rgba(34, 197, 94, 0.2)',
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 22,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 6,
   },
   label: {
-    color: '#d9e878',
+    color: '#dee4df',
     fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginTop: 2,
-    textTransform: 'uppercase',
+    fontWeight: '600',
+    marginTop: 4,
   },
   inputShell: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 16,
+    backgroundColor: '#0f1512',
+    borderColor: '#252b28',
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     gap: 10,
     paddingHorizontal: 14,
   },
   input: {
-    color: '#f8f3e8',
+    color: '#dee4df',
     flex: 1,
     fontSize: 15,
-    paddingVertical: 14,
+    paddingVertical: 13,
   },
   error: {
-    color: '#f87171',
+    color: '#ef4444',
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 18,
   },
   button: {
     alignItems: 'center',
-    backgroundColor: '#d9e878',
-    borderRadius: 16,
+    backgroundColor: '#22c55e',
+    borderRadius: 14,
     justifyContent: 'center',
-    minHeight: 52,
-    marginTop: 14,
-    shadowColor: '#d9e878',
+    minHeight: 50,
+    marginTop: 10,
+    shadowColor: '#22c55e',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -254,16 +230,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   buttonText: {
-    color: '#10251d',
+    color: '#003824',
     fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.3,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.9,
     transform: [{ scale: 0.99 }],
   },
   disabled: {
     opacity: 0.6,
+  },
+  footerNote: {
+    color: '#6b7280',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

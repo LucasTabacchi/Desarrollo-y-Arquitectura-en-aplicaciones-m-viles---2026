@@ -49,3 +49,10 @@ test('worker consumes both telemetry topics and records heartbeats', () => {
   assert.match(workerSource, /last_consumed_at/);
   assert.match(workerSource, /subscribe\(\{ topic: weatherTopic/);
 });
+
+test('worker auto-closes expired valves via pending commands without direct valve updates', () => {
+  assert.match(workerSource, /checkExpiredIrrigationValves/);
+  assert.match(workerSource, /from\('irrigation_commands'\)\s*\.insert/);
+  assert.doesNotMatch(workerSource, /from\('valves'\)\.update/);
+});
+

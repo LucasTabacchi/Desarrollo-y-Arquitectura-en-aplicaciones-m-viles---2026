@@ -29,6 +29,7 @@ on conflict (id) do update set
 insert into public.organizations (id, name)
 values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Estancia Didáctica Concordia'),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'Estancia La Tranquera'),
   ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'Granja de Pruebas Aislada');
 
 insert into public.memberships (organization_id, user_id, role)
@@ -36,24 +37,39 @@ values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'producer'),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '22222222-2222-2222-2222-222222222222', 'operator'),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-3333-3333-3333-333333333333', 'advisor'),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '11111111-1111-1111-1111-111111111111', 'producer'),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '22222222-2222-2222-2222-222222222222', 'operator'),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '33333333-3333-3333-3333-333333333333', 'advisor'),
   ('dddddddd-dddd-dddd-dddd-dddddddddddd', '44444444-4444-4444-4444-444444444444', 'advisor');
 insert into public.plots (id, organization_id, name, crop, boundary, threshold_min, threshold_max)
 values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Costa 1', 'Citrus', '{"type":"Polygon","coordinates":[[[-58.3980,-31.3920],[-58.3970,-31.3920],[-58.3970,-31.3910],[-58.3980,-31.3910],[-58.3980,-31.3920]]]}', 25, 45),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Costa 2', 'Citrus', '{"type":"Polygon","coordinates":[[[-58.3968,-31.3920],[-58.3958,-31.3920],[-58.3958,-31.3910],[-58.3968,-31.3910],[-58.3968,-31.3920]]]}', 25, 45),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Monte A', 'Soja', '{"type":"Polygon","coordinates":[[[-58.3980,-31.3908],[-58.3970,-31.3908],[-58.3970,-31.3898],[-58.3980,-31.3898],[-58.3980,-31.3908]]]}', 25, 45);
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Monte A', 'Soja', '{"type":"Polygon","coordinates":[[[-58.3980,-31.3908],[-58.3970,-31.3908],[-58.3970,-31.3898],[-58.3980,-31.3898],[-58.3980,-31.3908]]]}', 25, 45),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'Lote El Trébol', 'Alfalfa', '{"type":"Polygon","coordinates":[[[-58.4050,-31.3850],[-58.4038,-31.3850],[-58.4038,-31.3838],[-58.4050,-31.3838],[-58.4050,-31.3850]]]}', 24, 44),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'Lote Los Pinos', 'Maíz', '{"type":"Polygon","coordinates":[[[-58.4035,-31.3850],[-58.4020,-31.3850],[-58.4020,-31.3838],[-58.4035,-31.3838],[-58.4035,-31.3850]]]}', 28, 48);
 
 insert into public.stations (id, plot_id, name, external_id)
 values
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Costa 1 Station', 'local-costa-1'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Costa 2 Station', 'local-costa-2'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Monte A Station', 'local-monte-a');
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Costa 1 - Norte', 'local-costa-1'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Costa 1 - Sur', 'local-costa-1-sur'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Costa 2 - Principal', 'local-costa-2'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Costa 2 - Auxiliar', 'local-costa-2-aux'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Monte A Station', 'local-monte-a'),
+  ('ffffffff-ffff-ffff-ffff-fffffffffff1', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1', 'Estación Trébol Central', 'local-tranquera-1'),
+  ('ffffffff-ffff-ffff-ffff-fffffffffff2', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2', 'Estación Los Pinos', 'local-tranquera-2');
 
 insert into public.valves (id, plot_id, station_id, name, state)
 values
   ('cccccccc-cccc-cccc-cccc-ccccccccccc1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'Costa 1 Valve', 'closed'),
+  ('cccccccc-cccc-cccc-cccc-ccccccccccc4', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4', 'Costa 1 - Válvula Sur', 'closed'),
   ('cccccccc-cccc-cccc-cccc-ccccccccccc2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'Costa 2 Valve', 'open'),
-  ('cccccccc-cccc-cccc-cccc-ccccccccccc3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'Monte A Valve', 'closed');
+  ('cccccccc-cccc-cccc-cccc-ccccccccccc5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb5', 'Costa 2 - Válvula Auxiliar', 'closed'),
+  ('cccccccc-cccc-cccc-cccc-ccccccccccc3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'Monte A Valve', 'closed'),
+  ('ffffffff-ffff-ffff-ffff-ffffffffff01', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'Válvula Trébol 1', 'closed'),
+  ('ffffffff-ffff-ffff-ffff-ffffffffff03', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'Válvula Trébol 2', 'closed'),
+  ('ffffffff-ffff-ffff-ffff-ffffffffff02', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2', 'ffffffff-ffff-ffff-ffff-fffffffffff2', 'Válvula Pinos Principal', 'closed'),
+  ('ffffffff-ffff-ffff-ffff-ffffffffff04', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2', 'ffffffff-ffff-ffff-ffff-fffffffffff2', 'Válvula Pinos Secundaria', 'closed');
 
 insert into public.readings (station_id, measured_at, source, soil_moisture_pct, air_temperature_c)
 select

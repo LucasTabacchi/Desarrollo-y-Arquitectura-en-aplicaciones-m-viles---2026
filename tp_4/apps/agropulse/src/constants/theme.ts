@@ -7,6 +7,33 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+export const AgroColors = {
+  background: '#0f1512',
+  backgroundDeep: '#0a0f0d',
+  surface: '#171d1a',
+  surfaceDark: '#121815',
+  surfaceContainer: '#1b211e',
+  surfaceContainerHigh: '#252b28',
+  surfaceContainerHighest: '#303633',
+  primary: '#22c55e',
+  primaryDim: '#10b981',
+  primaryAccent: '#4edea3',
+  onPrimary: '#003824',
+  border: '#1f2923',
+  borderHighlight: 'rgba(34, 197, 94, 0.2)',
+  borderLight: 'rgba(255, 255, 255, 0.08)',
+  text: '#dee4df',
+  textBright: '#ffffff',
+  textMuted: '#86948a',
+  textSecondary: '#bbcabf',
+  statusDry: '#ef4444',
+  statusOptimal: '#22c55e',
+  statusMoist: '#3b82f6',
+  statusStale: '#6b7280',
+  statusWarning: '#f59e0b',
+  statusError: '#ff5449',
+} as const;
+
 export const Colors = {
   light: {
     text: '#000000',
@@ -16,11 +43,11 @@ export const Colors = {
     textSecondary: '#60646C',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#dee4df',
+    background: '#0f1512',
+    backgroundElement: '#171d1a',
+    backgroundSelected: '#252b28',
+    textSecondary: '#86948a',
   },
 } as const;
 

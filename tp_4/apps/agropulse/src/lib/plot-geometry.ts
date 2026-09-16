@@ -3,7 +3,7 @@ export type GeoJsonPolygon = { type: 'Polygon'; coordinates: number[][][] };
 
 export type PlotStatus = 'stale' | 'dry' | 'optimal' | 'wet';
 
-export const DEFAULT_STALE_AGE_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_STALE_AGE_MS = 15 * 60 * 1000;
 
 export function computePlotStatus(
   moisture: number | null,

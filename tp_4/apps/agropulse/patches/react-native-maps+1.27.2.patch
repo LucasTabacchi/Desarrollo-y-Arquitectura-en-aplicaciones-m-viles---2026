@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/MarkerManager.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/MarkerManager.java
+index 1234567..89abcdef 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/MarkerManager.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/MarkerManager.java
+@@ -289,8 +289,8 @@ public class MarkerManager extends ViewGroupManager<MapMarker> implements RNMaps
+                     public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                         int newWidth = right - left;
+                         int newHeight = bottom - top;
+-                        MapMarker marker = (MapMarker) v.getParent();
+-                        if(marker != null){
++                        if (v.getParent() instanceof MapMarker) {
++                            MapMarker marker = (MapMarker) v.getParent();
+                             marker.update(newWidth, newHeight);
+                         }
+                     }

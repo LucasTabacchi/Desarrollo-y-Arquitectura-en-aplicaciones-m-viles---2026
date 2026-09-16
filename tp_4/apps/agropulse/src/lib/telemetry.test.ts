@@ -30,4 +30,16 @@ describe('telemetry history', () => {
     expect(chart.max).toBe(100);
     expect(toMoistureChartData([], 25, 45).points).toEqual([]);
   });
+
+  it('safely downsamples large datasets to prevent flex chart collapse', () => {
+    const readings = Array.from({ length: 300 }, (_, i) => ({
+      measured_at: new Date(Date.now() - (300 - i) * 60 * 1000).toISOString(),
+      soil_moisture_pct: 20 + (i % 30),
+    }));
+
+    const chart = toMoistureChartData(readings, 25, 45, 12);
+    expect(chart.points.length).toBe(12);
+    expect(chart.points[0].value).toBe(readings[0].soil_moisture_pct);
+    expect(chart.points[11].value).toBe(readings[299].soil_moisture_pct);
+  });
 });

@@ -125,7 +125,7 @@ export default function CreatePlotScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.closeButton}>
-            <Ionicons name="close" color="#f8f3e8" size={24} />
+            <Ionicons name="close" color="#dee4df" size={24} />
           </Pressable>
           <View>
             <Text style={styles.eyebrow}>AGROPULSE / ALTA DE LOTE</Text>
@@ -137,7 +137,7 @@ export default function CreatePlotScreen() {
           <Text style={styles.label}>NOMBRE DEL LOTE *</Text>
           <TextInput
             placeholder="Ej: Costa 3, Parcela Norte"
-            placeholderTextColor="#718078"
+            placeholderTextColor="#6b7280"
             value={name}
             onChangeText={setName}
             style={styles.input}
@@ -146,7 +146,7 @@ export default function CreatePlotScreen() {
           <Text style={styles.label}>CULTIVO (OPCIONAL)</Text>
           <TextInput
             placeholder="Ej: Citrus, Soja, Maíz"
-            placeholderTextColor="#718078"
+            placeholderTextColor="#6b7280"
             value={crop}
             onChangeText={setCrop}
             style={styles.input}
@@ -199,7 +199,7 @@ export default function CreatePlotScreen() {
               style={[styles.submitButton, (isSubmitting || !name.trim()) && styles.buttonDisabled]}
             >
               {isSubmitting ? (
-                <ActivityIndicator color="#10251d" />
+                <ActivityIndicator color="#003824" />
               ) : (
                 <Text style={styles.submitText}>Crear lote</Text>
               )}
@@ -215,27 +215,29 @@ export default function CreatePlotScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#10251d' },
+  screen: { flex: 1, backgroundColor: '#0f1512' },
   content: { padding: 22, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 8 },
   closeButton: {
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#173827',
+    backgroundColor: '#171d1a',
+    borderColor: '#252b28',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  eyebrow: { color: '#a9bd78', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
-  title: { color: '#f8f3e8', fontSize: 28, fontWeight: '900', letterSpacing: -0.8 },
-  form: { gap: 12, backgroundColor: '#173827', borderRadius: 24, padding: 18 },
-  label: { color: '#a9bd78', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  eyebrow: { color: '#22c55e', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
+  title: { color: '#dee4df', fontSize: 28, fontWeight: '900', letterSpacing: -0.8 },
+  form: { gap: 12, backgroundColor: '#171d1a', borderColor: '#252b28', borderWidth: 1, borderRadius: 24, padding: 18 },
+  label: { color: '#8ba895', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   input: {
-    backgroundColor: '#0d241a',
+    backgroundColor: '#0f1512',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#315340',
-    color: '#f8f3e8',
+    borderColor: '#252b28',
+    color: '#dee4df',
     fontSize: 15,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -248,25 +250,25 @@ const styles = StyleSheet.create({
     height: 120,
     textAlignVertical: 'top',
   },
-  hint: { color: '#87918b', fontSize: 12, lineHeight: 17 },
-  error: { color: '#ffb4aa', fontSize: 14, fontWeight: '600', paddingHorizontal: 4 },
-  success: { color: '#d9e878', fontSize: 16, fontWeight: '800', textAlign: 'center', marginVertical: 12 },
+  hint: { color: '#8ba895', fontSize: 12, lineHeight: 17 },
+  error: { color: '#ef4444', fontSize: 14, fontWeight: '600', paddingHorizontal: 4 },
+  success: { color: '#22c55e', fontSize: 16, fontWeight: '800', textAlign: 'center', marginVertical: 12 },
   actions: { gap: 10, marginTop: 10 },
   submitButton: {
-    backgroundColor: '#d9e878',
+    backgroundColor: '#22c55e',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  submitText: { color: '#10251d', fontSize: 16, fontWeight: '800' },
+  submitText: { color: '#003824', fontSize: 16, fontWeight: '800' },
   buttonDisabled: { opacity: 0.5 },
   cancelButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#171d1a',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#315340',
+    borderColor: '#252b28',
     paddingVertical: 14,
     alignItems: 'center',
   },
-  cancelText: { color: '#f8f3e8', fontSize: 15, fontWeight: '700' },
+  cancelText: { color: '#dee4df', fontSize: 15, fontWeight: '700' },
 });

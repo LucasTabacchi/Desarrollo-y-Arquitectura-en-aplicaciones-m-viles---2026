@@ -18,9 +18,27 @@ export type MoistureChartData = {
   thresholdMax: number;
 };
 
-export function toMoistureChartData(readings: TelemetryReading[], thresholdMin: number, thresholdMax: number): MoistureChartData {
+export function toMoistureChartData(
+  readings: TelemetryReading[],
+  thresholdMin: number,
+  thresholdMax: number,
+  maxPoints = 12,
+): MoistureChartData {
+  let sampled = readings;
+  if (readings.length > maxPoints) {
+    const step = (readings.length - 1) / (maxPoints - 1);
+    sampled = [];
+    for (let i = 0; i < maxPoints; i++) {
+      sampled.push(readings[Math.round(i * step)]);
+    }
+  }
+
   return {
-    points: readings.map((reading, index) => ({ x: index, value: reading.soil_moisture_pct, measuredAt: reading.measured_at })),
+    points: sampled.map((reading, index) => ({
+      x: index,
+      value: reading.soil_moisture_pct,
+      measuredAt: reading.measured_at,
+    })),
     min: 0,
     max: 100,
     thresholdMin,

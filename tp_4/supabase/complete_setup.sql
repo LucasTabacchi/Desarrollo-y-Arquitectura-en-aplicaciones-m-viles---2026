@@ -221,8 +221,10 @@ on conflict (id) do update set
 
 insert into public.stations (id, plot_id, name, external_id)
 values
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Costa 1 Station', 'local-costa-1'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Costa 2 Station', 'local-costa-2'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Costa 1 - Norte', 'local-costa-1'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Costa 1 - Sur', 'local-costa-1-sur'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Costa 2 - Principal', 'local-costa-2'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Costa 2 - Auxiliar', 'local-costa-2-aux'),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Monte A Station', 'local-monte-a')
 on conflict (id) do update set
   name = excluded.name,
@@ -231,7 +233,9 @@ on conflict (id) do update set
 insert into public.valves (id, plot_id, station_id, name, state)
 values
   ('cccccccc-cccc-cccc-cccc-ccccccccccc1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'Costa 1 Valve', 'closed'),
+  ('cccccccc-cccc-cccc-cccc-ccccccccccc4', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4', 'Costa 1 - Válvula Sur', 'closed'),
   ('cccccccc-cccc-cccc-cccc-ccccccccccc2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'Costa 2 Valve', 'open'),
+  ('cccccccc-cccc-cccc-cccc-ccccccccccc5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb5', 'Costa 2 - Válvula Auxiliar', 'closed'),
   ('cccccccc-cccc-cccc-cccc-ccccccccccc3', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'Monte A Valve', 'closed')
 on conflict (id) do update set
   name = excluded.name,
@@ -289,3 +293,12 @@ on conflict do nothing;
 insert into public.alerts (plot_id, message, severity)
 values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'La humedad del suelo está por debajo del umbral mínimo configurado.', 'warning');
+
+-- RF-21: Support notes and GPS coordinates for manual readings
+alter table public.readings
+  add column if not exists notes text,
+  add column if not exists latitude numeric(9,6),
+  add column if not exists longitude numeric(9,6);
+
+grant insert (notes, latitude, longitude)
+  on public.readings to authenticated;

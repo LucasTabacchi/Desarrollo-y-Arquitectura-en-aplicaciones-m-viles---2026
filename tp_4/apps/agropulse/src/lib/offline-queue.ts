@@ -11,6 +11,9 @@ export type QueuedReading = {
   measuredAt: string;
   soilMoisturePct: number;
   airTemperatureC: number | null;
+  notes?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type QueuedCommand = {
@@ -73,18 +76,33 @@ export async function flushQueue(): Promise<{ flushed: number; remaining: number
   for (const item of queue) {
     try {
       if (item.type === 'manual-reading') {
-        const { stationId, measuredAt, soilMoisturePct, airTemperatureC } = item.payload;
-        const { error } = await supabase.from('readings').upsert(
-          {
-            station_id: stationId,
-            measured_at: measuredAt,
-            source: 'manual',
-            soil_moisture_pct: soilMoisturePct,
-            air_temperature_c: airTemperatureC,
-          },
+        const { stationId, measuredAt, soilMoisturePct, airTemperatureC, notes, latitude, longitude } = item.payload;
+        const payload: Record<string, unknown> = {
+          station_id: stationId,
+          measured_at: measuredAt,
+          source: 'manual',
+          soil_moisture_pct: soilMoisturePct,
+          air_temperature_c: airTemperatureC,
+        };
+        if (notes) payload.notes = notes;
+        if (latitude != null) payload.latitude = latitude;
+        if (longitude != null) payload.longitude = longitude;
+
+        let { error } = await supabase.from('readings').upsert(
+          payload,
           { onConflict: 'station_id,measured_at' },
         );
-        if (error) throw error;
+        if (error && error.code === 'PGRST204') {
+          delete payload.notes;
+          delete payload.latitude;
+          delete payload.longitude;
+          const retry = await supabase.from('readings').upsert(
+            payload,
+            { onConflict: 'station_id,measured_at' },
+          );
+          error = retry.error;
+        }
+        if (error && error.code !== '23505') throw error;
       } else {
         const { valveId, action, durationMinutes, clientRequestId } = item.payload;
         const { error } = await supabase.from('irrigation_commands').insert({

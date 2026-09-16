@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-export const stationExternalIds = ['local-costa-1', 'local-costa-2', 'local-monte-a'] as const;
+export const stationExternalIds = [
+  'local-costa-1',
+  'local-costa-1-sur',
+  'local-costa-2',
+  'local-costa-2-aux',
+  'local-monte-a',
+  'local-tranquera-1',
+  'local-tranquera-2',
+] as const;
 export const soilMoistureTopic = 'soil.moisture';
 export const weatherTopic = 'weather.tick';
 export type SoilMoistureEvent = { event_id: string; event_type: typeof soilMoistureTopic; station_external_id: string; measured_at: string; soil_moisture_pct: number; air_temperature_c: number };

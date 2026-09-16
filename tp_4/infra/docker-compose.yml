@@ -8,7 +8,7 @@ services:
   simulator:
     build: ../services/event-pipeline
     command: ["node", "dist/simulator.js"]
-    environment: { KAFKA_BROKERS: "redpanda-0:9092", SIMULATOR_INTERVAL_MS: "${SIMULATOR_INTERVAL_MS:-5000}" }
+    environment: { KAFKA_BROKERS: "redpanda-0:9092", SIMULATOR_INTERVAL_MS: "${SIMULATOR_INTERVAL_MS:-8000}" }
     depends_on: { redpanda: { condition: service_healthy } }
   worker:
     build: ../services/event-pipeline

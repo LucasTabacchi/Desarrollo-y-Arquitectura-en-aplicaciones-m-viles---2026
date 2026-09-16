@@ -6,6 +6,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test src/*.test.ts",
     "simulator": "tsx --env-file=.env src/simulator.ts",
+    "simulator:standalone": "tsx --env-file=.env src/simulator.ts",
     "worker": "tsx --env-file=.env src/worker.ts"
   },
   "dependencies": {

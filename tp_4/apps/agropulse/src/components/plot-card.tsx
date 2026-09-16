@@ -26,65 +26,103 @@ export type Plot = {
 
 const statusConfig: Record<
   PlotStatus,
-  { label: string; color: string; bg: string; border: string; hint: string; icon: keyof typeof Ionicons.glyphMap }
+  {
+    label: string;
+    color: string;
+    bg: string;
+    cardBg: string;
+    border: string;
+    hint: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    dotColor: string;
+    telemetryText: string;
+    chevronColor: string;
+  }
 > = {
   optimal: {
-    label: 'Óptimo',
-    color: '#4ade80',
-    bg: 'rgba(74, 222, 128, 0.14)',
-    border: 'rgba(74, 222, 128, 0.3)',
+    label: 'ÓPTIMO',
+    color: '#22c55e',
+    bg: 'rgba(34, 197, 94, 0.16)',
+    cardBg: '#101a14',
+    border: 'rgba(34, 197, 94, 0.22)',
     hint: 'Nivel hídrico en rango ideal',
-    icon: 'checkmark-circle',
+    icon: 'leaf-outline',
+    dotColor: '#22c55e',
+    telemetryText: 'Telemetría activa',
+    chevronColor: 'rgba(34, 197, 94, 0.7)',
   },
   dry: {
-    label: 'Seco',
-    color: '#f87171',
-    bg: 'rgba(248, 113, 113, 0.16)',
-    border: 'rgba(248, 113, 113, 0.35)',
+    label: 'SECO',
+    color: '#ef4444',
+    bg: 'rgba(239, 68, 68, 0.2)',
+    cardBg: '#1f1315',
+    border: 'rgba(239, 68, 68, 0.28)',
     hint: 'Bajo umbral mín. · Requiere riego',
-    icon: 'alert-circle',
+    icon: 'water-outline',
+    dotColor: '#ef4444',
+    telemetryText: 'Atención requerida',
+    chevronColor: 'rgba(239, 68, 68, 0.8)',
   },
   wet: {
-    label: 'Húmedo',
-    color: '#38bdf8',
-    bg: 'rgba(56, 189, 248, 0.14)',
-    border: 'rgba(56, 189, 248, 0.3)',
-    hint: 'Suelo saturado · Suspender riego',
+    label: 'HÚMEDO',
+    color: '#3b82f6',
+    bg: 'rgba(59, 130, 246, 0.18)',
+    cardBg: '#101824',
+    border: 'rgba(59, 130, 246, 0.25)',
+    hint: 'Suelo saturado · No aplicar riego',
     icon: 'water',
+    dotColor: '#3b82f6',
+    telemetryText: 'Atención requerida',
+    chevronColor: 'rgba(59, 130, 246, 0.8)',
   },
   stale: {
-    label: 'Sin datos',
-    color: '#94a3b8',
-    bg: 'rgba(148, 163, 184, 0.12)',
-    border: 'rgba(148, 163, 184, 0.25)',
+    label: 'SIN DATOS',
+    color: '#86948a',
+    bg: 'rgba(107, 114, 128, 0.18)',
+    cardBg: '#141715',
+    border: '#242b26',
     hint: 'Sin lecturas recientes',
-    icon: 'time',
+    icon: 'cloud-offline-outline',
+    dotColor: '#6b7280',
+    telemetryText: 'Señal perdida',
+    chevronColor: '#6b7280',
   },
 };
 
-function getCropMeta(crop: string | null): { icon: keyof typeof Ionicons.glyphMap; color: string; label: string } {
+function getCropMeta(crop: string | null): { label: string } {
   const normalized = (crop ?? '').toLowerCase();
   if (normalized.includes('citrus') || normalized.includes('limon') || normalized.includes('naranja') || normalized.includes('mandarina')) {
-    return { icon: 'nutrition-outline', color: '#fb923c', label: crop ?? 'Citrus' };
+    return { label: crop ?? 'Citrus' };
   }
   if (normalized.includes('soja') || normalized.includes('soy')) {
-    return { icon: 'leaf-outline', color: '#4ade80', label: crop ?? 'Soja' };
+    return { label: crop ?? 'Soja' };
   }
   if (normalized.includes('maiz') || normalized.includes('corn')) {
-    return { icon: 'sunny-outline', color: '#facc15', label: crop ?? 'Maíz' };
+    return { label: crop ?? 'Maíz' };
   }
-  return { icon: 'leaf-outline', color: '#a3e635', label: crop ?? 'Cultivo general' };
+  return { label: crop ?? 'Cultivo general' };
+}
+
+function getReadingAgeText(measuredAt: string | null, status: PlotStatus): string {
+  if (!measuredAt) return 'Sin lecturas';
+  if (status === 'stale') return 'Lectura antigua (>15 min)';
+  const age = formatReadingAge(measuredAt);
+  if (age === 'Recién') return 'Actualizado recién';
+  return `Actualizado ${age}`;
 }
 
 export function PlotCard({ plot, onPress }: { plot: Plot; onPress: () => void }) {
-  const latest = plot.stations?.[0]?.readings?.[0] ?? null;
+  const allReadings = (plot.stations ?? [])
+    .flatMap((s) => s.readings ?? [])
+    .filter((r) => r && r.measured_at && Number.isFinite(Number(r.soil_moisture_pct)))
+    .sort((a, b) => new Date(b.measured_at).getTime() - new Date(a.measured_at).getTime());
+  const latest = allReadings[0] ?? null;
+
   const status = computePlotStatus(
     latest?.soil_moisture_pct ?? null,
     latest?.measured_at ?? null,
     Number(plot.threshold_min),
     Number(plot.threshold_max),
-    Date.now(),
-    DEFAULT_STALE_AGE_MS,
   );
 
   const config = statusConfig[status];
@@ -94,64 +132,98 @@ export function PlotCard({ plot, onPress }: { plot: Plot; onPress: () => void })
   const max = Math.max(min, Math.min(100, Number(plot.threshold_max) || 100));
   const moisture = latest?.soil_moisture_pct != null ? Math.max(0, Math.min(100, latest.soil_moisture_pct)) : null;
 
+  const stationsCount = plot.stations?.length ?? 0;
+  const stationInfo = stationsCount > 1 ? `${stationsCount} estaciones` : plot.stations?.[0]?.name;
+  const agronomicNotice = status === 'dry' ? 'Riego sugerido' : (status === 'wet' ? 'No aplicar riego' : null);
+  const subtitleDetail = agronomicNotice || stationInfo;
+  const subtitleText = `Cultivo: ${cropMeta.label}${subtitleDetail ? ` · ${subtitleDetail}` : ''}`;
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: config.cardBg, borderColor: config.border },
+        pressed && styles.cardPressed,
+      ]}
+    >
       {/* Top Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={[styles.cropAvatar, { backgroundColor: `${cropMeta.color}18`, borderColor: `${cropMeta.color}40` }]}>
-            <Ionicons name={cropMeta.icon} size={22} color={cropMeta.color} />
+          <View style={[styles.avatarBox, { backgroundColor: config.bg, borderColor: config.border }]}>
+            <Ionicons name={config.icon} size={20} color={config.color} />
           </View>
-          <View style={styles.titleArea}>
-            <Text style={styles.plotName}>{plot.name}</Text>
-            <View style={styles.subTitleRow}>
-              <Text style={[styles.cropLabel, { color: cropMeta.color }]}>{cropMeta.label}</Text>
-              {plot.stations?.[0]?.name && (
-                <>
-                  <Text style={styles.dotSeparator}>•</Text>
-                  <Text style={styles.stationLabel}>{plot.stations[0].name}</Text>
-                </>
-              )}
+          <View style={styles.headerInfo}>
+            <View style={styles.titleRow}>
+              <Text style={styles.plotName} numberOfLines={1}>{plot.name}</Text>
+              <View style={[styles.badge, { backgroundColor: config.bg }]}>
+                <Text style={[styles.badgeText, { color: config.color }]}>{config.label}</Text>
+              </View>
             </View>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {subtitleText}
+            </Text>
           </View>
         </View>
 
         <View style={styles.headerRight}>
-          <View style={[styles.statusPill, { backgroundColor: config.bg, borderColor: config.border }]}>
-            <View style={[styles.statusDot, { backgroundColor: config.color }]} />
-            <Text style={[styles.statusLabel, { color: config.color }]}>{config.label}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#708078" />
+          <Ionicons
+            name={status === 'stale' ? 'time-outline' : 'chevron-forward'}
+            size={status === 'stale' ? 22 : 18}
+            color={config.chevronColor}
+          />
         </View>
       </View>
 
-      {/* Telemetry Grid */}
-      <View style={styles.metricsGrid}>
-        {/* Metric 1: Humedad */}
-        <View style={styles.metricTile}>
-          <View style={styles.metricTitleRow}>
-            <Ionicons name="water-outline" size={14} color="#38bdf8" />
-            <Text style={styles.metricTitle}>HUMEDAD SUELO</Text>
+      {/* Metrics Row */}
+      <View style={styles.metricsRow}>
+        {/* Metric: Humedad */}
+        <View style={styles.metricCol}>
+          <View style={styles.metricIconBox}>
+            <Ionicons
+              name="water-outline"
+              size={18}
+              color={status === 'dry' ? '#ef4444' : (status === 'stale' ? '#52695c' : '#38bdf8')}
+            />
           </View>
-          <View style={styles.metricValueRow}>
-            <Text style={[styles.metricValue, { color: moisture != null ? config.color : '#94a3b8' }]}>
+          <View style={styles.metricInfo}>
+            <View style={styles.metricLabelRow}>
+              <Text style={styles.metricLabel}>Humedad</Text>
+              <Text style={styles.metricSubText}>Obj {min}–{max}%</Text>
+            </View>
+            <Text
+              style={[
+                styles.metricValue,
+                { color: status === 'dry' ? '#ef4444' : (moisture != null ? '#ffffff' : '#6b7280') },
+              ]}
+            >
               {moisture != null ? `${moisture}%` : '--'}
             </Text>
-            <Text style={styles.metricRange}>Obj {min}–{max}%</Text>
           </View>
         </View>
 
-        {/* Metric 2: Temperatura */}
-        <View style={styles.metricTile}>
-          <View style={styles.metricTitleRow}>
-            <Ionicons name="thermometer-outline" size={14} color="#f97316" />
-            <Text style={styles.metricTitle}>TEMPERATURA</Text>
+        {/* Metric: Temperatura */}
+        <View style={styles.metricCol}>
+          <View style={styles.metricIconBox}>
+            <Ionicons
+              name="thermometer-outline"
+              size={18}
+              color={latest?.air_temperature_c != null ? '#22c55e' : '#52695c'}
+            />
           </View>
-          <View style={styles.metricValueRow}>
-            <Text style={styles.metricValue}>
+          <View style={styles.metricInfo}>
+            <View style={styles.metricLabelRow}>
+              <Text style={styles.metricLabel}>Temperatura</Text>
+              <Text style={styles.metricSubText}>Ambiente</Text>
+            </View>
+            <Text
+              style={[
+                styles.metricValue,
+                { color: latest?.air_temperature_c != null ? '#ffffff' : '#6b7280' },
+              ]}
+            >
               {latest?.air_temperature_c != null ? `${latest.air_temperature_c}°C` : '--'}
             </Text>
-            <Text style={styles.metricSub}>Ambiente</Text>
           </View>
         </View>
       </View>
@@ -165,7 +237,7 @@ export function PlotCard({ plot, onPress }: { plot: Plot; onPress: () => void })
               styles.targetZone,
               {
                 left: `${min}%`,
-                width: `${max - min}%`,
+                width: `${Math.max(0, max - min)}%`,
               },
             ]}
           />
@@ -176,7 +248,7 @@ export function PlotCard({ plot, onPress }: { plot: Plot; onPress: () => void })
                 styles.moistureIndicator,
                 {
                   left: `${Math.max(2, Math.min(98, moisture))}%`,
-                  backgroundColor: config.color,
+                  backgroundColor: status === 'dry' ? '#ef4444' : config.color,
                   shadowColor: config.color,
                 },
               ]}
@@ -190,13 +262,17 @@ export function PlotCard({ plot, onPress }: { plot: Plot; onPress: () => void })
         </View>
       </View>
 
-      {/* Footer Banner */}
-      <View style={[styles.footerBanner, { backgroundColor: config.bg, borderColor: config.border }]}>
-        <View style={styles.footerHint}>
-          <Ionicons name={config.icon} size={15} color={config.color} />
-          <Text style={[styles.footerText, { color: config.color }]}>{config.hint}</Text>
+      {/* Footer Row */}
+      <View style={styles.footerRow}>
+        <View style={styles.footerLeft}>
+          <View style={[styles.statusDot, { backgroundColor: config.dotColor }]} />
+          <Text style={[styles.footerStatusText, { color: config.dotColor }]}>
+            {config.telemetryText}
+          </Text>
         </View>
-        <Text style={styles.footerTime}>{formatReadingAge(latest?.measured_at ?? null)}</Text>
+        <Text style={styles.footerAgeText}>
+          {getReadingAgeText(latest?.measured_at ?? null, status)}
+        </Text>
       </View>
     </Pressable>
   );
@@ -204,21 +280,19 @@ export function PlotCard({ plot, onPress }: { plot: Plot; onPress: () => void })
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#132d20',
-    borderColor: '#264a37',
-    borderRadius: 24,
-    borderWidth: 1.5,
-    gap: 13,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
     elevation: 3,
   },
   cardPressed: {
-    opacity: 0.94,
-    transform: [{ scale: 0.985 }],
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
   },
   header: {
     alignItems: 'center',
@@ -231,126 +305,102 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  cropAvatar: {
+  avatarBox: {
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1.2,
-    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 42,
     justifyContent: 'center',
-    width: 44,
+    width: 42,
   },
-  titleArea: {
+  headerInfo: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
-  plotName: {
-    color: '#f8f3e8',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.3,
-  },
-  subTitleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  cropLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  dotSeparator: {
-    color: '#52695c',
-    fontSize: 11,
-  },
-  stationLabel: {
-    color: '#8fa597',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  headerRight: {
+  titleRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
   },
-  statusPill: {
-    alignItems: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  plotName: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
-  statusDot: {
-    borderRadius: 999,
-    height: 7,
-    width: 7,
+  badge: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
   },
-  statusLabel: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  metricsGrid: {
+  subtitle: {
+    color: '#86948a',
+    fontSize: 12.5,
+    fontWeight: '500',
+  },
+  headerRight: {
+    paddingLeft: 8,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 2,
+  },
+  metricCol: {
+    alignItems: 'center',
+    flex: 1,
     flexDirection: 'row',
     gap: 10,
   },
-  metricTile: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 16,
-    borderWidth: 1,
-    flex: 1,
-    gap: 6,
-    padding: 12,
+  metricIconBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 26,
   },
-  metricTitleRow: {
+  metricInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  metricLabelRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 5,
-  },
-  metricTitle: {
-    color: '#8fa597',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  metricValueRow: {
-    alignItems: 'baseline',
-    flexDirection: 'row',
-    gap: 6,
     justifyContent: 'space-between',
   },
+  metricLabel: {
+    color: '#86948a',
+    fontSize: 11.5,
+    fontWeight: '500',
+  },
+  metricSubText: {
+    color: '#52695c',
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
   metricValue: {
-    color: '#f8f3e8',
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: '800',
     letterSpacing: -0.5,
   },
-  metricRange: {
-    color: '#8fa597',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  metricSub: {
-    color: '#8fa597',
-    fontSize: 11,
-    fontWeight: '600',
-  },
   gaugeContainer: {
-    gap: 5,
+    gap: 4,
+    marginTop: -2,
   },
   gaugeTrack: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#1a221d',
     borderRadius: 999,
-    height: 8,
+    height: 5,
     overflow: 'hidden',
     position: 'relative',
     width: '100%',
   },
   targetZone: {
-    backgroundColor: 'rgba(74, 222, 128, 0.28)',
+    backgroundColor: 'rgba(34, 197, 94, 0.22)',
     borderRadius: 999,
     bottom: 0,
     position: 'absolute',
@@ -360,52 +410,52 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     bottom: 0,
     elevation: 2,
-    marginLeft: -4,
+    marginLeft: -3,
     position: 'absolute',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
     top: 0,
-    width: 8,
+    width: 6,
   },
   gaugeLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 2,
+    paddingHorizontal: 1,
   },
   gaugeLabel: {
-    color: '#657e70',
-    fontSize: 10,
+    color: '#52695c',
+    fontSize: 9.5,
     fontWeight: '600',
   },
   gaugeLabelCenter: {
-    color: '#8fa597',
-    fontSize: 10,
-    fontWeight: '700',
+    color: '#718277',
+    fontSize: 9.5,
+    fontWeight: '600',
   },
-  footerBanner: {
+  footerRow: {
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    marginTop: 2,
+    paddingTop: 10,
   },
-  footerHint: {
+  footerLeft: {
     alignItems: 'center',
-    flex: 1,
     flexDirection: 'row',
-    gap: 7,
+    gap: 6,
   },
-  footerText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
+  statusDot: {
+    borderRadius: 999,
+    height: 6.5,
+    width: 6.5,
   },
-  footerTime: {
-    color: '#8fa597',
-    fontSize: 11,
+  footerStatusText: {
+    fontSize: 11.5,
     fontWeight: '600',
+  },
+  footerAgeText: {
+    color: '#86948a',
+    fontSize: 11,
+    fontWeight: '500',
   },
 });
