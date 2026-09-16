@@ -1,3 +1,4 @@
+import process from 'node:process';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL ?? 'https://rzrgamaxaxxoobvvgdcx.supabase.co';
@@ -17,7 +18,7 @@ async function check() {
   const { data: users } = await supabase.auth.admin.listUsers();
   console.log(
     'USERS:',
-    users.users.map((u) => ({ id: u.id, email: u.email })),
+    users?.users?.map((u) => ({ id: u.id, email: u.email })) ?? [],
   );
 }
 
