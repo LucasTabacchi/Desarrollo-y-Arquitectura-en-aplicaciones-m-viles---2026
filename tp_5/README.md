@@ -64,7 +64,6 @@ flowchart TD
 
 - **`mobile/`**: Aplicación React Native CLI (TypeScript) con el módulo nativo Kotlin para Android y componentes de instrumentación.
 - **`backend/`**: Servidor de referencia de alta velocidad en Node.js + Fastify para los tests de throughput de subida y descarga (RF-03).
-- **`stitch_network_qos_monitor_ui/`**: Prototipos visuales y especificación de diseño NOC Industrial Utilitarian Brutalism (`DESIGN.md`).
 
 ---
 
