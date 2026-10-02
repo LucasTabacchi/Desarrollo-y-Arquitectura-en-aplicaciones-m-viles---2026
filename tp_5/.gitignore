@@ -75,6 +75,7 @@ yarn-error.log
 !.yarn/versions
 
 # Google Maps API keys (never commit)
+android/local.properties
 android/app/src/debug/res/values/google_maps_api.xml
 android/app/src/release/res/values/google_maps_api.xml
 
