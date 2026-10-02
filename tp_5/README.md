@@ -1,134 +1,166 @@
-# TP5 - Network QoS Monitor
+# Network QoS Monitor
 
-**Licenciatura en Sistemas de Información**  
-**Desarrollo de Aplicaciones Móviles - 2026**
+Aplicación React Native que mide y registra la calidad de la red móvil: latencia, throughput, RSSI/señal, tipo de red, y geolocalización de mediciones.
 
-Analizador y visualizador de calidad de red móvil en tiempo real con mapeo de cobertura personal, persistencia local georreferenciada y diseño de instrumentación industrial brutalista (NOC Console).
+## Features (RFs implementados)
 
----
+| RF | Descripción | Estado |
+|----|-------------|--------|
+| RF-01 | Detección de tipo de red (5G/LTE/3G/2G/Wi-Fi), RSSI, operador | ✅ |
+| RF-02 | Ping TCP (RTT min/avg/max/jitter/packet-loss) | ✅ |
+| RF-03 | Throughput (download Mbps + upload Mbps) | ✅ |
+| RF-04 | Geolocalización de cada medición | ✅ |
+| RF-05 | Mapa de cobertura con heatmap | ✅ |
+| RF-06 | Gráficas temporales (RTT, throughput, QoS score) por sesión | ✅ |
+| RF-07 | Medición periódica en background y alertas | ✅* |
+| RF-08 | Exportación CSV / JSON como archivos compartibles | ✅ |
+| RF-09 | Historial/mapa con filtros por tipo de red, fecha y área | ✅ |
 
-## 01. Arquitectura de la Solución
+## Stack
 
-El proyecto implementa una arquitectura desacoplada en capas para garantizar que los sockets de medición y temporizadores no degraden el hilo de JavaScript (UI Thread):
+- **React Native 0.87** (CLI — no Expo, por requerimiento de módulos nativos)
+- **UI:** React Native Paper (Material 3) + tipografía Inter
+- **Estado:** Zustand
+- **Navegación:** React Navigation bottom tabs
+- **Gráficas:** react-native-gifted-charts
+- **Mapas:** react-native-maps (Heatmap + Markers)
+- **Sockets:** react-native-tcp-socket (ping TCP)
+- **GPS:** react-native-geolocation-service
+- **Background:** react-native-background-fetch
+- **Notificaciones:** @notifee/react-native
+- **SQLite:** react-native-sqlite-storage
+- **Bottom sheet:** @gorhom/bottom-sheet
+- **Backend:** Node.js / Express (servidor de throughput)
 
-```mermaid
-flowchart TD
-    subgraph UI["01. CAPA DE PRESENTACIÓN (UI Thread)"]
-        direction TB
-        Dash["DashboardScreen<br/>(Telemetría en vivo, RTT, GPS)"]
-        Live["LiveTestScreen<br/>(Osciloscopio vectorial + Throughput)"]
-        Map["CoverageMapScreen<br/>(Heatmap GIS + Celdas)"]
-        Hist["HistoryScreen & Detail<br/>(Bitácora densa y Series temporales)"]
-        Conf["ConfigScreen<br/>(Calibración SLA y Hosts)"]
-    end
+## Estructura del proyecto
 
-    subgraph ENGINE["02. MOTOR DE MEDICIÓN (QoS Engine)"]
-        direction TB
-        Ping["PingEngine<br/>(Sondas RTT y Jitter vía TCP)"]
-        Throughput["ThroughputRunner<br/>(Benchmark DL/UL en Mbps)"]
-        Alert["AlertService<br/>(Evaluación SLA + Notifee)"]
-        Daemon["BackgroundMeasurementService<br/>(Muestreo periódico en segundo plano)"]
-    end
-
-    subgraph PERSISTENCE["03. PERSISTENCIA Y GEOLOCALIZACIÓN"]
-        direction TB
-        DB[("DatabaseService<br/>(SQLite local: sessions, samples)")]
-        Geo["GeoService<br/>(GPS Fused Location Provider)"]
-        Export["ExportService<br/>(Serialización CSV / JSON)"]
-    end
-
-    subgraph NATIVE["04. PUENTE NATIVO (Native Bridge)"]
-        direction TB
-        NetInfo["NetInfo<br/>(Detección Wi-Fi / Celular)"]
-        Telephony["TelephonyModule Kotlin<br/>(TelephonyManager: RSSI, RAT, Carrier)"]
-    end
-
-    subgraph BACKEND["05. SERVIDOR DE BENCHMARK (Externo)"]
-        Fastify["Fastify Throughput Server (Node.js)<br/>(Payload binario pseudo-aleatorio)"]
-    end
-
-    %% Flujos de datos y control
-    UI -->|Inicia tests y consume estado| ENGINE
-    UI -->|Consulta y filtra mediciones| PERSISTENCE
-    UI -->|Muestra interfaz activa| NATIVE
-    ENGINE -->|Benchmark TCP/HTTP| Fastify
-    ENGINE -->|Evalúa umbrales SLA| Alert
-    ENGINE -->|Persiste sesiones y muestras| DB
-    ENGINE -->|Georreferencia mediciones| Geo
-    ENGINE -->|Lee métricas del módem y RAT| NATIVE
+```
+├── src/
+│   ├── components/common/     # QualityChip, MetricCard, NetworkTypeBadge, SectionHeader
+│   ├── navigation/            # AppNavigator (5 tabs)
+│   ├── screens/               # Dashboard, Map, History, Charts, Settings
+│   ├── services/
+│   │   ├── background/        # BackgroundService (react-native-background-fetch + notifee)
+│   │   ├── geo/               # GeoService (GPS + permission handling)
+│   │   ├── measurement/       # MeasurementEngine, PingProbe, ThroughputProbe
+│   │   ├── network/           # useNetworkInfo hook
+│   │   └── persistence/       # PersistenceService (SQLite + CSV/JSON export)
+│   ├── store/                 # Zustand stores (Network, Measurement, History, Settings)
+│   ├── theme/                 # Design system (colores, tipografía, espaciado)
+│   └── types/                 # TypeScript interfaces globales
+├── android/
+│   └── app/src/main/java/com/networkqosmonitor/modules/
+│       ├── CellularInfoModule.kt   # Native module: TelephonyManager → RSSI/tipo/operador
+│       └── CellularInfoPackage.kt  # ReactPackage registration
+├── ios/NetworkQoSMonitor/
+│   ├── CellularInfoModule.swift    # Native module: CoreTelephony → tipo/operador
+│   └── CellularInfoModule.m        # ObjC bridge header
+└── backend/
+    ├── server.js       # Express throughput server (download/upload endpoints)
+    ├── package.json
+    └── Dockerfile
 ```
 
----
+## Configuración
 
-## 02. Estructura del Repositorio
+### Android — permisos ya declarados en AndroidManifest.xml
 
-- **`mobile/`**: Aplicación React Native CLI (TypeScript) con el módulo nativo Kotlin para Android y componentes de instrumentación.
-- **`backend/`**: Servidor de referencia de alta velocidad en Node.js + Fastify para los tests de throughput de subida y descarga (RF-03).
-- **`stitch_network_qos_monitor_ui/`**: Prototipos visuales y especificación de diseño NOC Industrial Utilitarian Brutalism (`DESIGN.md`).
+```xml
+INTERNET, ACCESS_NETWORK_STATE, READ_PHONE_STATE,
+ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, ACCESS_BACKGROUND_LOCATION,
+RECEIVE_BOOT_COMPLETED, FOREGROUND_SERVICE, POST_NOTIFICATIONS
+```
 
----
+### iOS — permisos declarados en Info.plist
 
-## 03. Decisiones de Diseño y Limitaciones Técnicas Conocidas
+```xml
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Network QoS Monitor uses your location to geotag measurements.</string>
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>Network QoS Monitor needs background location for periodic monitoring.</string>
+```
 
-1. **Sondas TCP vs. ICMP Raw Sockets**:
-   - En Android e iOS estándar (sin permisos de root/jailbreak), el sistema operativo restringe la creación de sockets `SOCK_RAW` necesarios para ICMP ping tradicional.
-   - Siguiendo la especificación del PRD (RF-02 y Sec 04.1), se implementaron sondas sobre sockets TCP reales (`react-native-tcp-socket`) midiendo con precisión el tiempo de establecimiento del handshake SYN/ACK contra puertos estándar (ej. 80, 53, 443).
-2. **Filtrado de Métricas RF Inviables en Móviles**:
-   - El prototipo inicial de laboratorio NOC incluía telemetría de analizador de espectro de escritorio (MIMO 4x4, orden de modulación QAM-256, captura promiscua PCAP `wlan0.mon0`, agregación de portadoras baseband).
-   - Dado que las APIs públicas de Android (`TelephonyManager`) y de iOS (`CoreTelephony`) no exponen estos registros internos de bajo nivel sin firmware de depuración de fabricante, se concentró la telemetría en los datos fehacientes: Tipo de RAT móvil (5G NR, 4G LTE, 3G HSPA, WiFi), Operador, PLMN y Potencia de señal RSRP/RSSI en dBm.
-3. **Cálculo de Jitter y SLA**:
-   - El cálculo de jitter implementa la metodología estándar de RFC 2544 / RFC 3550 basada en la media de las desviaciones absolutas entre muestras consecutivas de RTT:  
-     $$\text{Jitter} = \frac{\sum_{i=2}^{N} |RTT_i - RTT_{i-1}|}{N - 1}$$
-4. **Protección de Datos No Comprimibles**:
-   - El endpoint `/download` del backend de referencia transmite un buffer binario pseudo-aleatorio para evitar que la compresión transparente de la pila de red (ej. gzip) falsee el cálculo de throughput en Mbps.
+## Backend de throughput (RF-03)
 
----
-
-## 04. Guía de Ejecución
-
-### 4.1 Levantar el Backend de Referencia (Throughput Server)
+### Desarrollo local
 
 ```bash
 cd backend
 npm install
-npm run build
 npm start
-```
-*El servidor escuchará en `http://localhost:3000` (o `http://10.0.2.2:3000` accesible desde el emulador de Android).*
-
-También disponible vía Docker:
-```bash
-docker build -t qos-benchmark-backend backend/
-docker run -p 3000:3000 qos-benchmark-backend
+# → Escucha en http://0.0.0.0:3000
 ```
 
-### 4.2 Ejecutar la Aplicación Mobile (Android)
+### Docker
 
-```bash
-cd mobile
-npm install
-npx react-native run-android
-```
-
-### 4.3 Ejecutar Suite de Tests Automatizados
-
-#### A. Tests Unitarios Mobile (Jest)
-```bash
-cd mobile
-npm test
-```
-*Ejecuta 31 pruebas unitarias: cálculo de jitter RFC 2544, evaluación de umbrales SLA, ThroughputRunner, SQLite DatabaseService, GeodeticUtils y exportación RFC 4180 CSV/JSON.*
-
-#### B. Tests Instrumentados Android (JUnit & Espresso en AVD/Dispositivo)
-```bash
-cd mobile/android
-./gradlew connectedDebugAndroidTest
-```
-*Ejecuta las pruebas instrumentadas en el emulador Android (`QoSInstrumentationTest`), validando el ciclo de vida de `MainActivity`, arranque de contexto y servicios nativos.*
-
-#### C. Tests de Integración Backend (Fastify & Node Test Runner)
 ```bash
 cd backend
-npm test
+docker build -t qos-backend .
+docker run -p 3000:3000 qos-backend
 ```
-*Valida las respuestas de `/ping`, `/download` con control de payload dinámico y `/upload` con cálculo de tasa de transferencia.*
+
+### Endpoints
+
+| Método | Path | Descripción |
+|--------|------|-------------|
+| `GET` | `/health` | Liveness check |
+| `GET` | `/download?bytes=10000000` | Descarga N bytes de payload |
+| `POST` | `/upload` | Recibe payload y reporta bytes recibidos |
+
+Configurar la URL del servidor en la pantalla **Settings**. El valor inicial es `http://localhost:3000`; en el emulador Android debe cambiarse a `http://10.0.2.2:3000`, y en un dispositivo físico a la IP LAN de la computadora.
+
+## Correr la app
+
+```bash
+# 1. Instalar deps
+npm install
+
+# 2. Android
+npx react-native run-android
+
+# 3. iOS (requiere Mac)
+cd ios && pod install
+npx react-native run-ios
+```
+
+## Módulo nativo — CellularInfoModule
+
+El módulo nativo expone el método `getCellularInfo()` que devuelve:
+
+```ts
+{
+  rssi: number | null;     // dBm (Android only, requiere ACCESS_FINE_LOCATION)
+  operator: string | null; // Nombre del operador (Claro, Personal, Movistar...)
+  cellType: string | null; // "5G" | "LTE" | "3G" | "2G"
+}
+```
+
+> **iOS:** RSSI retorna `null`. Apple no expone señal dBm por API pública. El tipo de red y el operador sí funcionan vía CoreTelephony.
+
+## Score QoS
+
+El score 0–100 es un compuesto ponderado:
+
+| Componente | Peso | Escala |
+|------------|------|--------|
+| Latencia media (RTT) | 40% | 0ms → 100, 500ms → 0 |
+| Throughput descarga | 40% | 100Mbps → 100, 0 → 0 |
+| RSSI score | 20% | -50dBm → 100, -110dBm → 0 |
+
+## Background measurements
+
+El servicio usa `react-native-background-fetch` configurado con el intervalo definido en Settings (default 15 min), registra el handler Headless JS Android y reprograma la tarea al cambiar el intervalo. Cuando la medición supera los umbrales configurados, se dispara una notificación local via `@notifee/react-native`.
+
+> *Las plataformas pueden aplazar o agrupar tareas de background por políticas de batería/OS; se debe validar en dispositivo real con los permisos de ubicación y notificaciones aceptados.
+
+## Exportación
+
+Desde la pantalla **History** → botón **Export**:
+- **CSV:** una fila por medición con todos los campos
+- **JSON:** array de `MeasurementRecord[]` completo
+
+Cada exportación se escribe primero en el directorio de documentos de la app y luego se abre el selector nativo para guardar o compartir el archivo.
+
+## Validación y entregables físicos
+
+Ejecutar `npm test`, `npm run lint` y `npx tsc --noEmit`. El repositorio contiene código y configuración reproducible; la generación/firma de APK o IPA y el video demo exigido por la entrega requieren una máquina/dispositivo físico y no se sustituyen por pruebas estáticas.
