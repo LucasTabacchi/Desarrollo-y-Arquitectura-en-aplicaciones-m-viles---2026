@@ -1,39 +1,72 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
 import { StatusHeader, Card, Icon, ActionButton } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
-
-interface CredentialItem {
-  id: string;
-  name: string;
-  target: string;
-}
-
-const mockCredentials: CredentialItem[] = [
-  {
-    id: 'cred-1',
-    name: 'Router MikroTik hAP ac2',
-    target: 'admin@192.168.1.1',
-  },
-  {
-    id: 'cred-2',
-    name: 'ONT Huawei HG8245W5',
-    target: 'admin@192.168.1.254',
-  },
-];
+import { CredentialManager } from '../../security/CredentialManager';
+import { CredentialMetadata } from '../../store/models';
+import { getRepositories, initDatabase } from '../../store';
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const isFocused = useIsFocused();
+
+  const [credentials, setCredentials] = useState<CredentialMetadata[]>([]);
+  const [manager, setManager] = useState<CredentialManager | null>(null);
+
+  const loadCredentials = useCallback(async () => {
+    try {
+      let repos;
+      try {
+        repos = getRepositories();
+      } catch (_) {
+        repos = await initDatabase();
+      }
+      const mgr = new CredentialManager(repos.credentials);
+      setManager(mgr);
+      const list = await mgr.listAll();
+      setCredentials(list);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadCredentials();
+    }
+  }, [isFocused, loadCredentials]);
+
+  const handleDelete = useCallback(
+    (cred: CredentialMetadata) => {
+      Alert.alert(
+        'Eliminar credencial',
+        `¿Deseas eliminar la credencial para "${cred.alias}"?`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Eliminar',
+            style: 'destructive',
+            onPress: async () => {
+              if (manager) {
+                await manager.deleteCredential(cred.id);
+                await loadCredentials();
+              }
+            },
+          },
+        ]
+      );
+    },
+    [manager, loadCredentials]
+  );
 
   return (
     <View style={styles.screen}>
@@ -52,12 +85,14 @@ export const SettingsScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Credenciales de equipos</Text>
         </View>
 
-        {mockCredentials.map((cred) => (
+        {credentials.map((cred) => (
           <Card key={cred.id} style={styles.credCard}>
             <View style={styles.cardHeader}>
               <View style={styles.credInfo}>
-                <Text style={styles.credName}>{cred.name}</Text>
-                <Text style={styles.credTarget}>{cred.target}</Text>
+                <Text style={styles.credName}>{cred.alias}</Text>
+                <Text style={styles.credTarget}>
+                  {cred.username}@{cred.host}:{cred.port}
+                </Text>
               </View>
               <View style={styles.iconBox}>
                 <Icon name="router" size={20} color={colors.onSurfaceVariant} />
@@ -81,22 +116,39 @@ export const SettingsScreen: React.FC = () => {
             {/* Actions */}
             <View style={styles.cardActions}>
               <ActionButton
-                label="Editar"
-                icon="edit"
+                label="Abrir SSH"
+                icon="terminal"
                 variant="secondary"
-                onPress={() => navigation.navigate('AddCredential', { id: cred.id })}
+                onPress={() =>
+                  navigation.navigate('SshConsole', {
+                    ip: cred.host,
+                    alias: cred.alias,
+                    user: cred.username,
+                    port: cred.port,
+                  })
+                }
                 style={styles.actionBtn}
               />
               <ActionButton
                 label="Eliminar"
                 icon="delete"
                 variant="danger"
-                onPress={() => {}}
+                onPress={() => handleDelete(cred)}
                 style={styles.actionBtn}
               />
             </View>
           </Card>
         ))}
+
+        {credentials.length === 0 && (
+          <View style={styles.emptyCard}>
+            <Icon name="lock" size={32} color={colors.onSurfaceVariant} />
+            <Text style={styles.emptyTitle}>Sin credenciales guardadas</Text>
+            <Text style={styles.emptySub}>
+              Agrega accesos SSH/Telnet para consultar routers y switches de forma segura.
+            </Text>
+          </View>
+        )}
 
         <ActionButton
           label="Agregar credencial"
@@ -150,17 +202,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   credName: {
-    ...typography.headlineSm,
+    ...typography.labelLg,
     color: colors.onSurface,
   },
   credTarget: {
     ...typography.telemetryMonoSm,
-    color: colors.secondary,
+    color: colors.onSurfaceVariant,
     marginTop: 2,
   },
   iconBox: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: spacing.radius.md,
     backgroundColor: colors.surfaceContainerHigh,
     alignItems: 'center',
@@ -169,25 +221,22 @@ const styles = StyleSheet.create({
   passwordField: {
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: spacing.radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    padding: spacing.sm + 2,
   },
   passwordLabel: {
     ...typography.labelSm,
-    fontSize: 9,
     color: colors.muted,
   },
   passwordDots: {
     ...typography.telemetryMono,
-    color: colors.onSurface,
-    fontSize: 16,
-    letterSpacing: 2,
+    color: colors.primary,
     marginTop: 2,
+    letterSpacing: 3,
   },
   securityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
   },
   securityText: {
     ...typography.labelSm,
@@ -195,13 +244,27 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
-    gap: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceStroke,
-    paddingTop: spacing.md,
+    gap: spacing.sm,
   },
   actionBtn: {
     flex: 1,
-    height: 44,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: spacing.radius.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.labelLg,
+    color: colors.onSurface,
+  },
+  emptySub: {
+    ...typography.bodySm,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
   },
 });

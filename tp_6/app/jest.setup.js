@@ -74,3 +74,36 @@ jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(() => jest.fn()),
 }));
 
+const mockKeychainMemory = new Map();
+jest.mock('react-native-keychain', () => ({
+  setGenericPassword: jest.fn(async (username, password, options) => {
+    const service = options?.service || 'default';
+    mockKeychainMemory.set(service, { username, password });
+    return true;
+  }),
+  getGenericPassword: jest.fn(async (options) => {
+    const service = options?.service || 'default';
+    const val = mockKeychainMemory.get(service);
+    return val ? { username: val.username, password: val.password } : false;
+  }),
+  resetGenericPassword: jest.fn(async (options) => {
+    const service = options?.service || 'default';
+    mockKeychainMemory.delete(service);
+    return true;
+  }),
+}));
+
+jest.mock('@dylankenneally/react-native-ssh-sftp', () => {
+  const MockClient = jest.fn().mockImplementation(() => ({
+    connect: jest.fn(async () => {}),
+    execute: jest.fn(async (cmd) => `Output of: ${cmd}\nstatus: OK`),
+    disconnect: jest.fn(async () => {}),
+  }));
+  return {
+    __esModule: true,
+    default: MockClient,
+    SSHClient: MockClient,
+  };
+});
+
+

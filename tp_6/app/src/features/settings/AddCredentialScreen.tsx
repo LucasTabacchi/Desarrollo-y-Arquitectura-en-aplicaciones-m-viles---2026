@@ -5,12 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
 import { StatusHeader, Card, Icon, ActionButton } from '../../core/ui';
+import { CredentialManager } from '../../security/CredentialManager';
+import { getRepositories, initDatabase } from '../../store';
 
 export const AddCredentialScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -19,6 +22,47 @@ export const AddCredentialScreen: React.FC = () => {
   const [port, setPort] = useState('22');
   const [user, setUser] = useState('admin');
   const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!alias.trim()) {
+      Alert.alert('Campo requerido', 'Ingresa un nombre o alias para el equipo');
+      return;
+    }
+    if (!host.trim()) {
+      Alert.alert('Campo requerido', 'Ingresa la dirección IP o host');
+      return;
+    }
+    if (!password) {
+      Alert.alert('Campo requerido', 'Ingresa la contraseña para acceso SSH');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      let repos;
+      try {
+        repos = getRepositories();
+      } catch (_) {
+        repos = await initDatabase();
+      }
+
+      const manager = new CredentialManager(repos.credentials);
+      await manager.saveCredential({
+        alias: alias.trim(),
+        host: host.trim(),
+        port: parseInt(port, 10) || 22,
+        username: user.trim() || 'admin',
+        password,
+      });
+
+      navigation.goBack();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudo guardar la credencial');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -112,10 +156,11 @@ export const AddCredentialScreen: React.FC = () => {
           {/* Action triggers */}
           <View style={styles.actionsRow}>
             <ActionButton
-              label="Guardar credencial"
+              label={saving ? 'Guardando...' : 'Guardar credencial'}
               icon="add_task"
               variant="primary"
-              onPress={() => navigation.goBack()}
+              onPress={handleSave}
+              disabled={saving}
             />
           </View>
         </Card>
@@ -145,20 +190,20 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
   },
   inputGroup: {
-    gap: 4,
+    gap: spacing.xs,
   },
   inputLabel: {
     ...typography.labelSm,
-    fontSize: 9,
-    color: colors.muted,
+    color: colors.onSurfaceVariant,
+    letterSpacing: 0.5,
   },
   input: {
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: spacing.radius.md,
+    paddingHorizontal: spacing.md,
     height: 48,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: spacing.radius.lg,
     borderWidth: 1,
     borderColor: colors.surfaceStroke,
-    paddingHorizontal: spacing.md,
     color: colors.onSurface,
     ...typography.bodyMd,
   },
@@ -173,19 +218,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.surfaceContainerLowest,
-    padding: spacing.md,
-    borderRadius: spacing.radius.md,
+    backgroundColor: 'rgba(61, 220, 151, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(61, 220, 151, 0.2)',
+    borderColor: 'rgba(61, 220, 151, 0.25)',
+    borderRadius: spacing.radius.md,
+    padding: spacing.md,
   },
   securityText: {
-    ...typography.bodySm,
-    color: colors.onSurfaceVariant,
+    ...typography.labelSm,
+    color: colors.success,
     flex: 1,
-    lineHeight: 18,
   },
   actionsRow: {
-    paddingTop: spacing.sm,
+    marginTop: spacing.sm,
   },
 });
