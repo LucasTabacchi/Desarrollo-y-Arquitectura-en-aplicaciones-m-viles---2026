@@ -45,7 +45,7 @@ See implementation_plan.md section 4 (per-phase criteria).
 
 ## Progress / Evidence
 - T0 (2026-10-03) [commit 6371f06]: RN 0.87.1 Bare app initialized in `app`. Installed native dependencies (UDP, TCP socket, Zeroconf, SSH fork, op-sqlite, Keychain, VisionCamera v5, Barcode Scanner, Geolocation, HTML-to-PDF, PDF view, NetInfo). Excluded legacy `bcprov-jdk15on` in Gradle. Added required Android permissions (multicast, wifi, camera, gps). Debug APK built successfully (`BUILD SUCCESSFUL`, `app-debug.apk` 238.5 MB). `npm test` passing.
-- T1 (2026-10-03): UI foundations implemented. Theme tokens (colors, spacing, typography from DESIGN.md), UI kit (StatusHeader, Card, ActionButton with 48dp+ hit targets, StatusBadge, SVG Icon component), 5-tab navigation (Inicio, Red, Instala., Historial, Ajustes), and full HomeScreen matching `inicio_network_diagnostics_suite` mockup. All sub-screens connected in RootStack. TypeScript check (`npx tsc --noEmit`) clean and `npm test` passing.
+- T1 (2026-10-03) [commit 05c791f]: UI foundations implemented. Theme tokens (colors, spacing, typography from DESIGN.md), UI kit (StatusHeader, Card, ActionButton with 48dp+ hit targets, StatusBadge, SVG Icon component), 5-tab navigation (Inicio, Red, Instala., Historial, Ajustes), and full HomeScreen matching `inicio_network_diagnostics_suite` mockup. All sub-screens connected in RootStack. TypeScript check (`npx tsc --noEmit`) clean and `npm test` passing.
 
 ## Next step
 T2 Local store: schema, models, repositories.
