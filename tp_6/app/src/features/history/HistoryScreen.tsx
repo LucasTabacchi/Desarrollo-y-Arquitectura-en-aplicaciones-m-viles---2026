@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,67 +6,267 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
-import { StatusHeader, Card, Icon, StatusBadge } from '../../core/ui';
+import { StatusHeader, Card, Icon, ActionButton } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
+import { getRepositories } from '../../store';
 
-interface DiagnosticHistoryItem {
+export type HistoryType = 'all' | 'snmp' | 'ssh' | 'installation';
+
+interface UnifiedHistoryItem {
   id: string;
-  type: 'snmp' | 'ssh' | 'report';
-  target: string;
+  type: 'snmp' | 'ssh' | 'installation';
+  typeLabel: 'SNMP' | 'SSH' | 'Instalación';
   deviceName: string;
-  timestamp: string;
-  status: 'synced' | 'pending' | 'failed';
-  summary: string;
+  ip?: string;
+  siteName: string;
+  resultStatus: 'OK' | 'Falla' | 'Alerta';
+  syncStatus: 'synced' | 'pending';
+  timeGroup: 'Hoy' | 'Ayer' | 'Anteriores';
+  timeStr: string;
+  rawPayload?: any;
 }
 
-const mockHistory: DiagnosticHistoryItem[] = [
+const DEFAULT_SAMPLE_HISTORY: UnifiedHistoryItem[] = [
   {
-    id: 'h-1',
+    id: 'sample-h-1',
     type: 'snmp',
-    target: '192.168.1.254',
+    typeLabel: 'SNMP',
     deviceName: 'ONT Huawei HG8245W5',
-    timestamp: 'Hoy 10:42',
-    status: 'synced',
-    summary: 'sysUpTime: 12d 4h 32m • 4 interfaces monitoreadas',
+    ip: '192.168.1.254',
+    siteName: 'Sitio Azotea Norte',
+    resultStatus: 'OK',
+    syncStatus: 'synced',
+    timeGroup: 'Hoy',
+    timeStr: 'Hoy 10:42',
   },
   {
-    id: 'h-2',
+    id: 'sample-h-2',
     type: 'ssh',
-    target: '192.168.1.1',
+    typeLabel: 'SSH',
     deviceName: 'Router MikroTik hAP ac2',
-    timestamp: 'Hoy 09:30',
-    status: 'pending',
-    summary: 'Comandos: /interface print, /system resource print',
+    ip: '192.168.1.1',
+    siteName: 'Sitio Azotea Norte',
+    resultStatus: 'Falla',
+    syncStatus: 'pending',
+    timeGroup: 'Hoy',
+    timeStr: 'Hoy 10:35',
   },
   {
-    id: 'h-3',
-    type: 'report',
-    target: '192.168.1.45',
+    id: 'sample-h-3',
+    type: 'installation',
+    typeLabel: 'Instalación',
+    deviceName: 'Router MikroTik hAP ac2',
+    ip: '192.168.1.1',
+    siteName: 'Sitio Azotea Norte',
+    resultStatus: 'OK',
+    syncStatus: 'pending',
+    timeGroup: 'Hoy',
+    timeStr: 'Hoy 10:20',
+  },
+  {
+    id: 'sample-h-4',
+    type: 'snmp',
+    typeLabel: 'SNMP',
     deviceName: 'Antena Ubiquiti LiteBeam',
-    timestamp: 'Ayer 16:15',
-    status: 'synced',
-    summary: 'Instalación completa • 3 fotos georreferenciadas',
+    ip: '192.168.1.45',
+    siteName: 'Sitio Azotea Norte',
+    resultStatus: 'Alerta',
+    syncStatus: 'synced',
+    timeGroup: 'Ayer',
+    timeStr: 'Ayer 16:30',
+  },
+  {
+    id: 'sample-h-5',
+    type: 'ssh',
+    typeLabel: 'SSH',
+    deviceName: 'Switch Cisco SG250-8P',
+    ip: '192.168.1.10',
+    siteName: 'Sitio Azotea Norte',
+    resultStatus: 'OK',
+    syncStatus: 'synced',
+    timeGroup: 'Ayer',
+    timeStr: 'Ayer 15:10',
   },
 ];
 
 export const HistoryScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [filter, setFilter] = useState<'all' | 'snmp' | 'ssh' | 'report'>('all');
-  const [search, setSearch] = useState('');
+  const isFocused = useIsFocused();
 
-  const filtered = mockHistory.filter((item) => {
-    if (filter !== 'all' && item.type !== filter) return false;
-    if (search && !item.deviceName.toLowerCase().includes(search.toLowerCase()) && !item.target.includes(search)) {
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activeFilter, setActiveFilter] = useState<HistoryType>('all');
+  const [items, setItems] = useState<UnifiedHistoryItem[]>([]);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const loadData = async () => {
+    try {
+      const repos = getRepositories();
+      const diagnostics = await repos.diagnostics.listAll(50);
+      const installations = await repos.installations.listAll();
+
+      const mappedList: UnifiedHistoryItem[] = [];
+
+      for (const diag of diagnostics) {
+        mappedList.push({
+          id: diag.id,
+          type: diag.type as 'snmp' | 'ssh',
+          typeLabel: diag.type === 'snmp' ? 'SNMP' : 'SSH',
+          deviceName: diag.type === 'snmp' ? 'Diagnóstico SNMP' : 'Consola SSH',
+          ip: diag.target,
+          siteName: 'Sitio Azotea Norte',
+          resultStatus: diag.status === 'failed' ? 'Falla' : 'OK',
+          syncStatus: diag.status === 'synced' ? 'synced' : 'pending',
+          timeGroup: 'Hoy',
+          timeStr: new Date(diag.createdAt).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        });
+      }
+
+      for (const inst of installations) {
+        mappedList.push({
+          id: inst.id,
+          type: 'installation',
+          typeLabel: 'Instalación',
+          deviceName: inst.deviceName,
+          ip: inst.deviceIp,
+          siteName: inst.siteName,
+          resultStatus: 'OK',
+          syncStatus: inst.status === 'synced' ? 'synced' : 'pending',
+          timeGroup: 'Hoy',
+          timeStr: new Date(inst.createdAt).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          rawPayload: inst,
+        });
+      }
+
+      if (mappedList.length > 0) {
+        setItems(mappedList);
+      } else {
+        setItems(DEFAULT_SAMPLE_HISTORY);
+      }
+    } catch {
+      setItems(DEFAULT_SAMPLE_HISTORY);
+    }
+  };
+
+  useEffect(() => {
+    if (isFocused) {
+      loadData();
+    }
+  }, [isFocused]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const filteredItems = items.filter((item) => {
+    if (activeFilter !== 'all' && item.type !== activeFilter) {
       return false;
     }
-    return true;
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase();
+    return (
+      item.deviceName.toLowerCase().includes(query) ||
+      (item.ip && item.ip.toLowerCase().includes(query)) ||
+      item.siteName.toLowerCase().includes(query)
+    );
   });
+
+  const hoyItems = filteredItems.filter((i) => i.timeGroup === 'Hoy');
+  const ayerItems = filteredItems.filter((i) => i.timeGroup === 'Ayer');
+  const olderItems = filteredItems.filter((i) => i.timeGroup === 'Anteriores');
+
+  const handleItemPress = (item: UnifiedHistoryItem) => {
+    if (item.type === 'installation') {
+      navigation.navigate('PdfPreview', {
+        filePath: item.rawPayload?.pdfPath || `reporte_${item.id}.pdf`,
+        title: `Reporte de Instalación - ${item.deviceName}`,
+      });
+    } else if (item.type === 'snmp') {
+      navigation.navigate('DeviceDetail', {
+        ip: item.ip || '192.168.1.254',
+        model: item.deviceName,
+        hostname: item.deviceName,
+      });
+    } else if (item.type === 'ssh') {
+      navigation.navigate('SshConsole', {
+        ip: item.ip || '192.168.1.1',
+        alias: item.deviceName,
+      });
+    }
+  };
+
+  const renderCard = (item: UnifiedHistoryItem) => {
+    return (
+      <TouchableOpacity
+        key={item.id}
+        activeOpacity={0.8}
+        onPress={() => handleItemPress(item)}
+      >
+        <Card style={styles.historyCard} variant="surface">
+          <View style={styles.cardTop}>
+            <View style={styles.badgePill}>
+              <Text style={styles.badgeText}>{item.typeLabel}</Text>
+            </View>
+
+            <View style={styles.statusGroup}>
+              {/* Result Pill */}
+              <View
+                style={[
+                  styles.resultPill,
+                  item.resultStatus === 'OK' && styles.resultOk,
+                  item.resultStatus === 'Falla' && styles.resultError,
+                  item.resultStatus === 'Alerta' && styles.resultWarn,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.resultText,
+                    item.resultStatus === 'OK' && { color: '#003822' },
+                    item.resultStatus === 'Falla' && { color: '#FFDAD6' },
+                    item.resultStatus === 'Alerta' && { color: '#00325A' },
+                  ]}
+                >
+                  {item.resultStatus}
+                </Text>
+              </View>
+
+              {/* Sync Icon */}
+              <Icon
+                name={item.syncStatus === 'synced' ? 'check_circle' : 'sync'}
+                size={18}
+                color={item.syncStatus === 'synced' ? colors.success : colors.secondary}
+              />
+            </View>
+          </View>
+
+          <View style={styles.deviceInfo}>
+            <Text style={styles.deviceName}>{item.deviceName}</Text>
+            {item.ip && <Text style={styles.deviceIp}>{item.ip}</Text>}
+          </View>
+
+          <View style={styles.locationRow}>
+            <Icon name="place" size={14} color={colors.onSurfaceVariant} />
+            <Text style={styles.locationText}>{item.siteName}</Text>
+          </View>
+        </Card>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.screen}>
@@ -79,102 +279,136 @@ export const HistoryScreen: React.FC = () => {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
-        {/* Search input */}
-        <View style={styles.searchBar}>
+        {/* Offline Availability Pill */}
+        <View style={styles.offlinePillRow}>
+          <View style={styles.offlinePill}>
+            <Icon name="check_circle" size={16} color={colors.success} />
+            <Text style={styles.offlinePillText}>Disponible sin conexión</Text>
+          </View>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
           <Icon name="radar" size={18} color={colors.onSurfaceVariant} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por equipo o IP..."
-            placeholderTextColor={colors.muted}
-            value={search}
-            onChangeText={setSearch}
+            placeholder="Buscar en historial..."
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
         </View>
 
         {/* Filter Chips */}
         <View style={styles.filterRow}>
-          {[
-            { key: 'all', label: 'Todos' },
-            { key: 'snmp', label: 'SNMP' },
-            { key: 'ssh', label: 'SSH' },
-            { key: 'report', label: 'Reportes' },
-          ].map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              activeFilter === 'all' && styles.filterChipActive,
+            ]}
+            onPress={() => setActiveFilter('all')}
+          >
+            <Text
               style={[
-                styles.filterChip,
-                filter === tab.key && styles.filterChipActive,
+                styles.filterChipText,
+                activeFilter === 'all' && styles.filterChipTextActive,
               ]}
-              onPress={() => setFilter(tab.key as any)}
             >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  filter === tab.key && styles.filterChipTextActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+              Todos
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              activeFilter === 'snmp' && styles.filterChipActive,
+            ]}
+            onPress={() => setActiveFilter('snmp')}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === 'snmp' && styles.filterChipTextActive,
+              ]}
+            >
+              SNMP
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              activeFilter === 'ssh' && styles.filterChipActive,
+            ]}
+            onPress={() => setActiveFilter('ssh')}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === 'ssh' && styles.filterChipTextActive,
+              ]}
+            >
+              SSH
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              activeFilter === 'installation' && styles.filterChipActive,
+            ]}
+            onPress={() => setActiveFilter('installation')}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === 'installation' && styles.filterChipTextActive,
+              ]}
+            >
+              Instalación
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* History List */}
-        <View style={styles.historyList}>
-          {filtered.map((item) => (
-            <Card key={item.id} style={styles.historyCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.deviceRow}>
-                  <View style={styles.iconBox}>
-                    <Icon
-                      name={
-                        item.type === 'snmp'
-                          ? 'radar'
-                          : item.type === 'ssh'
-                          ? 'terminal'
-                          : 'add_task'
-                      }
-                      size={18}
-                      color={
-                        item.type === 'snmp'
-                          ? colors.primary
-                          : item.type === 'ssh'
-                          ? colors.secondary
-                          : colors.success
-                      }
-                    />
-                  </View>
-                  <View>
-                    <Text style={styles.deviceName}>{item.deviceName}</Text>
-                    <Text style={styles.deviceTarget}>{item.target}</Text>
-                  </View>
-                </View>
+        {/* Groups */}
+        {hoyItems.length > 0 && (
+          <View style={styles.groupSection}>
+            <Text style={styles.groupHeader}>HOY</Text>
+            {hoyItems.map(renderCard)}
+          </View>
+        )}
 
-                <StatusBadge
-                  label={item.status === 'synced' ? 'Sincronizado' : 'Pendiente'}
-                  variant={item.status === 'synced' ? 'success' : 'warning'}
-                  dot
-                />
-              </View>
+        {ayerItems.length > 0 && (
+          <View style={styles.groupSection}>
+            <Text style={styles.groupHeader}>AYER</Text>
+            {ayerItems.map(renderCard)}
+          </View>
+        )}
 
-              <Text style={styles.summaryText}>{item.summary}</Text>
+        {olderItems.length > 0 && (
+          <View style={styles.groupSection}>
+            <Text style={styles.groupHeader}>ANTERIORES</Text>
+            {olderItems.map(renderCard)}
+          </View>
+        )}
 
-              <View style={styles.cardFooter}>
-                <Text style={styles.timestampText}>{item.timestamp}</Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    item.type === 'ssh'
-                      ? navigation.navigate('SshConsole', { ip: item.target })
-                      : navigation.navigate('DeviceDetail', { ip: item.target, model: item.deviceName })
-                  }
-                >
-                  <Text style={styles.detailLink}>Ver detalles &gt;</Text>
-                </TouchableOpacity>
-              </View>
-            </Card>
-          ))}
-        </View>
+        {filteredItems.length === 0 && (
+          <Card style={styles.emptyCard} variant="surface">
+            <Icon name="history" size={32} color={colors.outline} />
+            <Text style={styles.emptyTitle}>Sin resultados en el historial</Text>
+            <Text style={styles.emptySubtitle}>
+              No se encontraron registros para los filtros seleccionados.
+            </Text>
+          </Card>
+        )}
       </ScrollView>
     </View>
   );
@@ -190,100 +424,161 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.margin,
-    paddingTop: spacing.md,
+    paddingTop: spacing.xs,
     paddingBottom: spacing.xxl + 20,
-    gap: spacing.lg,
+    gap: spacing.md,
   },
-  searchBar: {
+  offlinePillRow: {
+    flexDirection: 'row',
+  },
+  offlinePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceContainer,
-    borderRadius: spacing.radius.lg,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceStroke,
-    height: 48,
+    gap: 6,
+    backgroundColor: colors.surfaceContainerHigh,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  offlinePillText: {
+    ...typography.labelSmall,
+    color: colors.onSurfaceVariant,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    minHeight: 48,
   },
   searchInput: {
-    ...typography.bodyMd,
-    color: colors.onSurface,
     flex: 1,
+    color: colors.onSurface,
+    ...typography.bodyMedium,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: spacing.radius.full,
-    backgroundColor: colors.surfaceContainer,
-    borderWidth: 1,
-    borderColor: colors.surfaceStroke,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primaryContainer,
-    borderColor: colors.primary,
-  },
-  filterChipText: {
-    ...typography.labelSm,
-    color: colors.onSurfaceVariant,
-  },
-  filterChipTextActive: {
-    color: colors.onPrimary,
-  },
-  historyList: {
-    gap: spacing.md,
-  },
-  historyCard: {
-    gap: spacing.sm + 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  deviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
     flex: 1,
-  },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: spacing.radius.md,
-    backgroundColor: colors.surfaceContainerHigh,
+    minHeight: 36,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 8,
   },
-  deviceName: {
-    ...typography.labelLg,
-    color: colors.onSurface,
+  filterChipActive: {
+    backgroundColor: colors.primary,
   },
-  deviceTarget: {
-    ...typography.telemetryMonoSm,
+  filterChipText: {
+    ...typography.labelSmall,
     color: colors.onSurfaceVariant,
+    fontWeight: '600',
   },
-  summaryText: {
-    ...typography.bodySm,
+  filterChipTextActive: {
+    color: '#001C39',
+    fontWeight: '700',
+  },
+  groupSection: {
+    gap: spacing.xs,
+  },
+  groupHeader: {
+    ...typography.labelSmall,
+    color: colors.onSurfaceVariant,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    paddingHorizontal: 4,
+    marginBottom: 2,
+  },
+  historyCard: {
+    padding: spacing.md,
+    gap: spacing.xs,
+    minHeight: 52,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badgePill: {
+    backgroundColor: colors.surfaceContainerHigh,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
     color: colors.onSurface,
+    textTransform: 'uppercase',
   },
-  cardFooter: {
+  statusGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceStroke,
-    paddingTop: spacing.sm,
+    gap: spacing.sm,
   },
-  timestampText: {
-    ...typography.bodySm,
-    color: colors.muted,
+  resultPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  detailLink: {
-    ...typography.labelMd,
+  resultOk: {
+    backgroundColor: '#00A56C',
+  },
+  resultError: {
+    backgroundColor: '#93000A',
+  },
+  resultWarn: {
+    backgroundColor: '#0063AA',
+  },
+  resultText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  deviceInfo: {
+    gap: 2,
+    marginTop: 2,
+  },
+  deviceName: {
+    ...typography.bodyMedium,
+    color: colors.onSurface,
+    fontWeight: '600',
+  },
+  deviceIp: {
+    ...typography.bodySmall,
     color: colors.primary,
+    fontFamily: 'monospace',
+    fontWeight: '500',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  locationText: {
+    ...typography.labelSmall,
+    color: colors.onSurfaceVariant,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    padding: spacing.xl,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  emptyTitle: {
+    ...typography.bodyMedium,
+    color: colors.onSurface,
+    fontWeight: '700',
+  },
+  emptySubtitle: {
+    ...typography.bodySmall,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
   },
 });
