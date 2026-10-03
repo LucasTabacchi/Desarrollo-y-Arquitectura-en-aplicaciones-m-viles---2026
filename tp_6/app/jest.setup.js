@@ -24,3 +24,12 @@ jest.mock('react-native-screens', () => {
     compatibilityFlags: {},
   };
 });
+
+jest.mock('@op-engineering/op-sqlite', () => ({
+  open: jest.fn(() => ({
+    executeAsync: jest.fn(async () => ({ rows: { _array: [] }, rowsAffected: 0 })),
+    executeBatchAsync: jest.fn(async () => {}),
+    transaction: jest.fn(async (cb) => cb({ executeAsync: jest.fn(), executeBatchAsync: jest.fn() })),
+    close: jest.fn(async () => {}),
+  })),
+}));
