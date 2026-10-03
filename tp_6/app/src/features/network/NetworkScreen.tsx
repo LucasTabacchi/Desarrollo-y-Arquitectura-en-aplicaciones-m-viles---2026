@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,56 +14,116 @@ import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
 import { StatusHeader, Card, Icon, StatusBadge, ActionButton } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
-
-interface ScannedDevice {
-  ip: string;
-  mac: string;
-  name: string;
-  isMdns?: boolean;
-  type: 'ont' | 'router' | 'antenna' | 'switch' | 'unknown';
-}
-
-const mockDevices: ScannedDevice[] = [
-  {
-    ip: '192.168.1.254',
-    mac: 'F4:C3:61:9A:82:10',
-    name: 'ONT Huawei HG8245W5',
-    isMdns: true,
-    type: 'ont',
-  },
-  {
-    ip: '192.168.1.1',
-    mac: 'B8:69:F4:11:C2:AA',
-    name: 'Router MikroTik hAP ac2',
-    type: 'router',
-  },
-  {
-    ip: '192.168.1.45',
-    mac: 'DC:9F:DB:44:19:EF',
-    name: 'Antena Ubiquiti LiteBeam',
-    isMdns: true,
-    type: 'antenna',
-  },
-  {
-    ip: '192.168.1.10',
-    mac: '00:26:98:A4:7B:33',
-    name: 'Switch Cisco SG250-8P',
-    type: 'switch',
-  },
-  {
-    ip: '192.168.1.88',
-    mac: '3C:7A:8A:22:90:54',
-    name: 'Desconocido',
-    type: 'unknown',
-  },
-];
+import {
+  DiscoveryEngine,
+  SubnetInfo,
+  DiscoveredDevice,
+  calculateSubnet,
+} from '../../network/discovery';
+import { getRepositories, initDatabase } from '../../store';
 
 export const NetworkScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const engine = useMemo(() => new DiscoveryEngine(), []);
+  const [subnet, setSubnet] = useState<SubnetInfo>(() =>
+    calculateSubnet('192.168.1.100', '255.255.255.0')
+  );
+  const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
-  const [scannedCount] = useState(142);
-  const totalHosts = 254;
-  const progressPercent = Math.round((scannedCount / totalHosts) * 100);
+  const [scannedCount, setScannedCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Load existing cached devices from DB on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const sub = await engine.getCurrentSubnet();
+        if (mounted) setSubnet(sub);
+
+        let repos;
+        try {
+          repos = getRepositories();
+        } catch (_) {
+          repos = await initDatabase();
+        }
+
+        const stored = await repos.devices.listAll();
+        if (mounted && stored.length > 0) {
+          setDevices(
+            stored.map((d) => ({
+              ip: d.ip,
+              mac: d.mac,
+              name: d.hostname || `Equipo ${d.ip}`,
+              vendor: d.vendor || 'Genérico',
+              type: 'router',
+              openPorts: [80],
+              isOnline: d.isOnline,
+              responseTimeMs: 15,
+            }))
+          );
+        }
+      } catch (_) {}
+    })();
+
+    return () => {
+      mounted = false;
+      engine.stopScan();
+    };
+  }, [engine]);
+
+  const handleToggleScan = useCallback(async () => {
+    if (isScanning) {
+      engine.stopScan();
+      setIsScanning(false);
+      return;
+    }
+
+    setIsScanning(true);
+    setScannedCount(0);
+
+    try {
+      await engine.startScan(
+        subnet,
+        (progress) => {
+          setScannedCount(progress.scanned);
+        },
+        (newDev) => {
+          setDevices((prev) => {
+            const index = prev.findIndex((d) => d.ip === newDev.ip);
+            if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = newDev;
+              return updated;
+            }
+            return [...prev, newDev];
+          });
+        }
+      );
+    } catch (_) {
+    } finally {
+      setIsScanning(false);
+    }
+  }, [isScanning, engine, subnet]);
+
+  const filteredDevices = useMemo(() => {
+    if (!searchQuery.trim()) return devices;
+    const q = searchQuery.toLowerCase();
+    return devices.filter(
+      (d) =>
+        d.ip.toLowerCase().includes(q) ||
+        d.name.toLowerCase().includes(q) ||
+        d.vendor.toLowerCase().includes(q) ||
+        (d.mac && d.mac.toLowerCase().includes(q))
+    );
+  }, [devices, searchQuery]);
+
+  const totalHosts = subnet.hosts.length || 254;
+  const progressPercent = Math.min(
+    100,
+    Math.round((scannedCount / totalHosts) * 100)
+  );
 
   return (
     <View style={styles.screen}>
@@ -82,7 +143,9 @@ export const NetworkScreen: React.FC = () => {
             <Icon name="radar" size={18} color={colors.primary} />
             <Text style={styles.subnetLabel}>SUBRED OPERATIVA</Text>
           </View>
-          <Text style={styles.subnetValue}>192.168.1.0/24</Text>
+          <Text style={styles.subnetValue}>
+            {subnet.networkAddress}/{subnet.cidr}
+          </Text>
 
           {/* Scan Progress */}
           <View style={styles.progressContainer}>
@@ -92,14 +155,18 @@ export const NetworkScreen: React.FC = () => {
                 <Text style={styles.progressText}>
                   {isScanning
                     ? `Escaneando: ${scannedCount}/${totalHosts} hosts`
-                    : 'Escaneo listo'}
+                    : scannedCount > 0
+                    ? `Escaneo completo: ${devices.length} detectados`
+                    : 'Listo para escanear'}
                 </Text>
               </View>
               <Text style={styles.progressPercent}>{progressPercent}%</Text>
             </View>
 
             <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+              <View
+                style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
+              />
             </View>
           </View>
 
@@ -107,21 +174,38 @@ export const NetworkScreen: React.FC = () => {
           <ActionButton
             label={isScanning ? 'Detener escaneo' : 'Iniciar escaneo de red'}
             variant={isScanning ? 'secondary' : 'primary'}
-            onPress={() => setIsScanning(!isScanning)}
+            onPress={handleToggleScan}
             icon={isScanning ? 'warning' : 'radar'}
           />
         </Card>
+
+        {/* Search / Filter Input */}
+        <View style={styles.searchBar}>
+          <Icon name="radar" size={16} color={colors.onSurfaceVariant} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Filtrar por IP, nombre o fabricante..."
+            placeholderTextColor={colors.onSurfaceVariant}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={styles.clearSearch}>Limpiar</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Detected Devices Section */}
         <View style={styles.devicesSection}>
           <View style={styles.devicesHeader}>
             <Text style={styles.devicesHeaderLabel}>DISPOSITIVOS DETECTADOS</Text>
             <Text style={styles.devicesHeaderCount}>
-              {mockDevices.length} ONLINE
+              {filteredDevices.length} ONLINE
             </Text>
           </View>
 
-          {mockDevices.map((dev) => (
+          {filteredDevices.map((dev) => (
             <TouchableOpacity
               key={dev.ip}
               style={styles.deviceCard}
@@ -130,6 +214,7 @@ export const NetworkScreen: React.FC = () => {
                   ip: dev.ip,
                   mac: dev.mac,
                   model: dev.name,
+                  hostname: dev.name,
                 })
               }
               activeOpacity={0.7}
@@ -140,22 +225,37 @@ export const NetworkScreen: React.FC = () => {
                   <Text style={styles.deviceName}>{dev.name}</Text>
                 </View>
 
-                {dev.isMdns && <StatusBadge label="mDNS" variant="neutral" />}
+                {dev.openPorts.length > 0 && (
+                  <StatusBadge
+                    label={`:${dev.openPorts[0]}`}
+                    variant="neutral"
+                  />
+                )}
               </View>
 
               <View style={styles.deviceMetaRow}>
                 <View style={styles.deviceMetaCol}>
-                  <Text style={styles.metaLabel}>IP ADDRESS</Text>
+                  <Text style={styles.metaLabel}>DIRECCIÓN IP</Text>
                   <Text style={styles.metaValue}>{dev.ip}</Text>
                 </View>
 
                 <View style={styles.deviceMetaCol}>
-                  <Text style={styles.metaLabel}>MAC HARDWARE</Text>
-                  <Text style={styles.metaValue}>{dev.mac}</Text>
+                  <Text style={styles.metaLabel}>DIRECCIÓN MAC</Text>
+                  <Text style={styles.metaValue}>{dev.mac || '—'}</Text>
                 </View>
               </View>
             </TouchableOpacity>
           ))}
+
+          {filteredDevices.length === 0 && !isScanning && (
+            <View style={styles.emptyState}>
+              <Icon name="radar" size={32} color={colors.onSurfaceVariant} />
+              <Text style={styles.emptyTitle}>Ningún equipo detectado</Text>
+              <Text style={styles.emptySub}>
+                Presiona "Iniciar escaneo de red" para descubrir equipos en la subred.
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -224,6 +324,26 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: colors.success,
   },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: spacing.radius.lg,
+    paddingHorizontal: spacing.md,
+    height: 48,
+    borderWidth: 1,
+    borderColor: colors.surfaceStroke,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.bodySm,
+    color: colors.onSurface,
+  },
+  clearSearch: {
+    ...typography.labelSm,
+    color: colors.primary,
+  },
   devicesSection: {
     gap: spacing.sm + 2,
   },
@@ -291,5 +411,21 @@ const styles = StyleSheet.create({
     ...typography.telemetryMono,
     color: colors.secondary,
     marginTop: 2,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
+  },
+  emptyTitle: {
+    ...typography.labelLg,
+    color: colors.onSurface,
+  },
+  emptySub: {
+    ...typography.bodySm,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    maxWidth: 260,
   },
 });
