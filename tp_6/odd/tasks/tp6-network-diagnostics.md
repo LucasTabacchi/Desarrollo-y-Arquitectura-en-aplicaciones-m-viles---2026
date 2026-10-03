@@ -32,7 +32,7 @@ Course assignment (TP6_Network_Diagnostics_Suite.md). Field sites have no/interm
 - [x] T1 UI foundations: theme tokens, fonts, UI kit, 5-tab navigation, Home with mock data
 - [x] T2 Local store: schema, models, repositories
 - [x] T3 SNMP: BER codec, PDU, UDP client, Device detail (SNMP tab)
-- [ ] T4 Discovery: subnet calc, TCP/UDP sweep, zeroconf, Network screen
+- [x] T4 Discovery: subnet calc, TCP/UDP sweep, zeroconf, Network screen
 - [ ] T5 Credentials + SSH: keychain, settings screens, SSH console with vendor presets
 - [ ] T6 Evidence + QR: camera, QR -> device sheet (backend/offline cache), GPS
 - [ ] T7 Installation wizard + PDF report + preview
@@ -48,6 +48,7 @@ See implementation_plan.md section 4 (per-phase criteria).
 - T1 (2026-10-03) [commit 05c791f]: UI foundations implemented. Theme tokens (colors, spacing, typography from DESIGN.md), UI kit (StatusHeader, Card, ActionButton with 48dp+ hit targets, StatusBadge, SVG Icon component), 5-tab navigation (Inicio, Red, Instala., Historial, Ajustes), and full HomeScreen matching `inicio_network_diagnostics_suite` mockup. All sub-screens connected in RootStack. TypeScript check (`npx tsc --noEmit`) clean and `npm test` passing.
 - T2 (2026-10-03) [commit fc4ef26]: SQLite schema & repositories implemented with `@op-engineering/op-sqlite` and `MockDatabaseAdapter`. Entities: `sites`, `devices`, `diagnostics`, `installations`, `installation_photos`, `credentials` (secrets key-referenced only), `outbox` (offline sync queue with attempts & backoff). Full unit test suite (`__tests__/store.test.ts`) passing with 6 test cases. `npx tsc --noEmit` and `npm test` 100% green.
 - T3 (2026-10-03) [commit 533e4a6]: Pure TypeScript ASN.1 BER encoder/decoder (INTEGER, OCTET STRING, NULL, OID, SEQUENCE, Counter32/64, Gauge32, TimeTicks), SNMP v1/v2c PDU builder/parser, and UDP client via `react-native-udp`. Integrated live telemetry query into `DeviceDetailScreen` with SQLite diagnostics saving and outbox enqueuing. 10 unit tests in `__tests__/snmp.test.ts` passing. `npm test` (3 suites, 17 tests) and `npx tsc --noEmit` clean.
+- T4 (2026-10-03) [commit 6f4d75a]: Subnet calculation module (IPv4 to 32-bit int, CIDR prefix to mask, usable range and host generator), TCP port prober (22, 23, 80, 443, 8291, 8080) with concurrency limiter, SNMP prober, Zeroconf mDNS listener, and DiscoveryEngine. Connected to `NetworkScreen` with progress bar, search/filter, and SQLite device persistence. 7 unit tests in `__tests__/discovery.test.ts` passing. Total 24 tests passing across 4 suites.
 
 ## Next step
-T4 Discovery: subnet calc, TCP/UDP sweep, zeroconf, Network screen.
+T5 Credentials + SSH: keychain, settings screens, SSH console with vendor presets.
