@@ -30,7 +30,7 @@ Course assignment (TP6_Network_Diagnostics_Suite.md). Field sites have no/interm
 ## Tasks
 - [x] T0 Native spike: init RN bare + TS, install native libs, debug APK builds (route: inline — scaffolding/commands)
 - [x] T1 UI foundations: theme tokens, fonts, UI kit, 5-tab navigation, Home with mock data
-- [ ] T2 Local store: schema, models, repositories
+- [x] T2 Local store: schema, models, repositories
 - [ ] T3 SNMP: BER codec, PDU, UDP client, Device detail (SNMP tab)
 - [ ] T4 Discovery: subnet calc, TCP/UDP sweep, zeroconf, Network screen
 - [ ] T5 Credentials + SSH: keychain, settings screens, SSH console with vendor presets
@@ -46,6 +46,7 @@ See implementation_plan.md section 4 (per-phase criteria).
 ## Progress / Evidence
 - T0 (2026-10-03) [commit 6371f06]: RN 0.87.1 Bare app initialized in `app`. Installed native dependencies (UDP, TCP socket, Zeroconf, SSH fork, op-sqlite, Keychain, VisionCamera v5, Barcode Scanner, Geolocation, HTML-to-PDF, PDF view, NetInfo). Excluded legacy `bcprov-jdk15on` in Gradle. Added required Android permissions (multicast, wifi, camera, gps). Debug APK built successfully (`BUILD SUCCESSFUL`, `app-debug.apk` 238.5 MB). `npm test` passing.
 - T1 (2026-10-03) [commit 05c791f]: UI foundations implemented. Theme tokens (colors, spacing, typography from DESIGN.md), UI kit (StatusHeader, Card, ActionButton with 48dp+ hit targets, StatusBadge, SVG Icon component), 5-tab navigation (Inicio, Red, Instala., Historial, Ajustes), and full HomeScreen matching `inicio_network_diagnostics_suite` mockup. All sub-screens connected in RootStack. TypeScript check (`npx tsc --noEmit`) clean and `npm test` passing.
+- T2 (2026-10-03) [commit fc4ef26]: SQLite schema & repositories implemented with `@op-engineering/op-sqlite` and `MockDatabaseAdapter`. Entities: `sites`, `devices`, `diagnostics`, `installations`, `installation_photos`, `credentials` (secrets key-referenced only), `outbox` (offline sync queue with attempts & backoff). Full unit test suite (`__tests__/store.test.ts`) passing with 6 test cases. `npx tsc --noEmit` and `npm test` 100% green.
 
 ## Next step
-T2 Local store: schema, models, repositories.
+T3 SNMP: BER codec, PDU, UDP client, Device detail (SNMP tab).
