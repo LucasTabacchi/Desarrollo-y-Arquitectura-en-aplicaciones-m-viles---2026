@@ -74,6 +74,30 @@ export class InstallationRepository {
     return res.rows.map((row) => this.mapRowToInstallation(row));
   }
 
+  async update(inst: Partial<Installation> & { id: string }): Promise<void> {
+    const updatedAt = Date.now();
+    const existing = await this.findById(inst.id);
+    if (!existing) return;
+
+    await this.db.execute(
+      `UPDATE installations SET 
+        device_name = ?,
+        notes = ?,
+        status = ?,
+        base_version = ?,
+        updated_at = ?
+      WHERE id = ?`,
+      [
+        inst.deviceName ?? existing.deviceName,
+        inst.notes ?? existing.notes ?? null,
+        inst.status ?? existing.status,
+        inst.baseVersion ?? existing.baseVersion,
+        updatedAt,
+        inst.id,
+      ]
+    );
+  }
+
   async updateStatus(
     id: string,
     status: 'synced' | 'pending' | 'conflict',

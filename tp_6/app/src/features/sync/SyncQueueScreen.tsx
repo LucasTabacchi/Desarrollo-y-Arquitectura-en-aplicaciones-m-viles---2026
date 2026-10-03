@@ -1,47 +1,138 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import NetInfo from '@react-native-community/netinfo';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
 import { StatusHeader, Card, Icon, StatusBadge, ActionButton } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
+import { getRepositories } from '../../store';
+import { OutboxItem } from '../../store/models';
+import { SyncWorker } from '../../sync/SyncWorker';
+
+interface DisplayQueueItem {
+  id: string;
+  title: string;
+  device: string;
+  subinfo: string;
+  timeStr: string;
+  status: 'pending' | 'retry' | 'error' | 'synced' | 'conflict';
+  attempts?: number;
+}
+
+const SAMPLE_QUEUE: DisplayQueueItem[] = [
+  {
+    id: 'sample-q-1',
+    title: 'Reporte de instalación',
+    device: 'Router MikroTik hAP ac2',
+    subinfo: 'Sitio Azotea Norte',
+    timeStr: 'Hoy 10:42',
+    status: 'pending',
+    attempts: 0,
+  },
+  {
+    id: 'sample-q-2',
+    title: 'Diagnóstico SNMP',
+    device: 'ONT Huawei HG8245W5',
+    subinfo: '192.168.1.254',
+    timeStr: 'Hoy 10:35',
+    status: 'retry',
+    attempts: 2,
+  },
+  {
+    id: 'sample-q-3',
+    title: 'Diagnóstico SSH',
+    device: 'Router MikroTik hAP ac2',
+    subinfo: '192.168.1.1:22',
+    timeStr: 'Hoy 10:15',
+    status: 'error',
+    attempts: 3,
+  },
+  {
+    id: 'sample-q-4',
+    title: 'Diagnóstico SNMP',
+    device: 'Antena Ubiquiti LiteBeam',
+    subinfo: '192.168.1.45',
+    timeStr: 'Hoy 09:50',
+    status: 'synced',
+    attempts: 1,
+  },
+];
 
 export const SyncQueueScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const isFocused = useIsFocused();
 
-  const pendingItems = [
-    {
-      id: 'q-1',
-      title: 'Diagnóstico SNMP Huawei ONT',
-      type: 'SNMP Telemetry',
-      created: 'Hoy 10:42',
-      status: 'pending',
-      retry: '1 intento',
-    },
-    {
-      id: 'q-2',
-      title: 'Comandos SSH MikroTik hAP ac2',
-      type: 'SSH Command Log',
-      created: 'Hoy 10:40',
-      status: 'pending',
-      retry: '0 intentos',
-    },
-    {
-      id: 'q-3',
-      title: 'Reporte de Instalación #1042',
-      type: 'PDF + Evidencias',
-      created: 'Hoy 10:35',
-      status: 'conflict',
-      retry: 'Conflicto de versión',
-    },
-  ];
+  const [dbItems, setDbItems] = useState<OutboxItem[]>([]);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const loadData = async () => {
+    try {
+      const repos = getRepositories();
+      const items = await repos.outbox.peekPending(Date.now() + 86400000, 50);
+      setDbItems(items);
+    } catch {
+      setDbItems([]);
+    }
+
+    try {
+      const net = await NetInfo.fetch();
+      setIsOnline(Boolean(net.isConnected && net.isInternetReachable !== false));
+    } catch {
+      setIsOnline(true);
+    }
+  };
+
+  useEffect(() => {
+    if (isFocused) {
+      loadData();
+    }
+  }, [isFocused]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await SyncWorker.syncAll();
+      await loadData();
+    } catch (err) {
+      console.warn('[SyncQueueScreen] Sync error:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleRetryItem = async (id: string) => {
+    setIsSyncing(true);
+    try {
+      await SyncWorker.retryItem(id);
+      await loadData();
+    } catch (err) {
+      console.warn('Retry error:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Map dbItems or sampleItems
+  const pendingCount = dbItems.length > 0 ? dbItems.length : 3;
 
   return (
     <View style={styles.screen}>
@@ -49,68 +140,169 @@ export const SyncQueueScreen: React.FC = () => {
         title="Cola de sincronización"
         showBack
         onPressBack={() => navigation.goBack()}
+        isOnline={isOnline}
       />
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-      >
-        {/* Outbox Status Summary */}
-        <Card style={styles.summaryCard} variant="high">
-          <View style={styles.summaryTop}>
-            <View style={styles.iconBox}>
-              <Icon name="cloud_sync" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.summaryInfo}>
-              <Text style={styles.summaryTitle}>Cola Offline (Outbox)</Text>
-              <Text style={styles.summarySubtitle}>
-                3 acciones esperando subida al backend
-              </Text>
-            </View>
-          </View>
-
-          <ActionButton
-            label="Sincronizar ahora"
-            icon="refresh"
-            variant="primary"
-            onPress={() => {}}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
           />
-        </Card>
+        }
+      >
+        {/* Offline Warning Banner */}
+        {!isOnline && (
+          <View style={styles.offlineBanner}>
+            <Icon name="warning" size={20} color="#F5A524" />
+            <Text style={styles.offlineBannerText}>
+              Sin conexión. Se sincronizará automáticamente al recuperar red.
+            </Text>
+          </View>
+        )}
 
-        {/* Pending Items List */}
-        <View style={styles.listSection}>
-          <Text style={styles.sectionTitle}>ACCIONES EN COLA</Text>
+        {/* Summary text */}
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryText}>
+            {pendingCount} {pendingCount === 1 ? 'acción pendiente' : 'acciones pendientes'}
+          </Text>
+        </View>
 
-          {pendingItems.map((item) => (
-            <Card key={item.id} style={styles.queueCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.itemTitleCol}>
-                  <Text style={styles.itemTitle}>{item.title}</Text>
-                  <Text style={styles.itemType}>{item.type}</Text>
-                </View>
+        {/* Database Items (if any) */}
+        {dbItems.map((item) => {
+          let title = 'Registro';
+          if (item.entityType === 'installation') title = 'Reporte de instalación';
+          if (item.entityType === 'diagnostic') title = 'Diagnóstico SNMP / SSH';
 
-                {item.status === 'conflict' ? (
-                  <StatusBadge label="Conflicto" variant="critical" dot />
+          let payloadObj: any = {};
+          try {
+            payloadObj = JSON.parse(item.payloadJson);
+          } catch {}
+
+          const deviceName = payloadObj.deviceName || `ID: ${item.entityId}`;
+          const isConflict = item.status === 'conflict';
+          const isError = item.attempts >= 3;
+
+          return (
+            <Card key={item.id} style={styles.itemCard} variant="surface">
+              <View style={styles.itemHeader}>
+                <Text style={styles.itemTitle}>{title}</Text>
+                {isConflict ? (
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate('SyncConflict', { conflictId: item.id })
+                    }
+                  >
+                    <StatusBadge label="Conflicto" variant="warning" dot />
+                  </TouchableOpacity>
+                ) : isError ? (
+                  <StatusBadge label="Error" variant="critical" dot />
+                ) : item.attempts > 0 ? (
+                  <StatusBadge
+                    label={`Reintentando (${item.attempts})`}
+                    variant="warning"
+                    dot
+                  />
                 ) : (
-                  <StatusBadge label="Encolado" variant="warning" dot />
+                  <StatusBadge label="Pendiente" variant="neutral" dot />
                 )}
               </View>
 
-              <View style={styles.cardFooter}>
-                <Text style={styles.footerText}>{item.created} • {item.retry}</Text>
+              <Text style={styles.itemDevice}>{deviceName}</Text>
+              <Text style={styles.itemMeta}>Entidad: {item.entityType}</Text>
 
-                {item.status === 'conflict' && (
-                  <ActionButton
-                    label="Resolver conflicto"
-                    variant="danger"
-                    onPress={() => navigation.navigate('SyncConflict', { conflictId: item.id })}
-                    style={styles.resolveBtn}
+              {isConflict && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.conflictBtn}
+                  onPress={() =>
+                    navigation.navigate('SyncConflict', { conflictId: item.id })
+                  }
+                >
+                  <Icon name="warning" size={16} color="#F5A524" />
+                  <Text style={styles.conflictBtnText}>Resolver conflicto de versión</Text>
+                </TouchableOpacity>
+              )}
+
+              {isError && (
+                <View style={styles.retryRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.retryBtn}
+                    onPress={() => handleRetryItem(item.id)}
+                  >
+                    <Text style={styles.retryBtnText}>Reintentar</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </Card>
+          );
+        })}
+
+        {/* Default Sample Items when db is empty */}
+        {dbItems.length === 0 &&
+          SAMPLE_QUEUE.map((item) => (
+            <Card key={item.id} style={styles.itemCard} variant="surface">
+              <View style={styles.itemHeader}>
+                <Text style={styles.itemTitle}>{item.title}</Text>
+                {item.status === 'pending' && (
+                  <StatusBadge label="Pendiente" variant="neutral" dot />
+                )}
+                {item.status === 'retry' && (
+                  <StatusBadge
+                    label={`Reintentando (${item.attempts})`}
+                    variant="warning"
+                    dot
                   />
                 )}
+                {item.status === 'error' && (
+                  <StatusBadge label="Error" variant="critical" dot />
+                )}
+                {item.status === 'synced' && (
+                  <StatusBadge label="Sincronizado" variant="success" dot />
+                )}
+                {item.status === 'conflict' && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate('SyncConflict', { conflictId: item.id })
+                    }
+                  >
+                    <StatusBadge label="Conflicto" variant="warning" dot />
+                  </TouchableOpacity>
+                )}
               </View>
+
+              <Text style={styles.itemDevice}>{item.device}</Text>
+              <Text style={styles.itemMeta}>{item.subinfo}</Text>
+              <Text style={[styles.itemMeta, { marginTop: 2 }]}>{item.timeStr}</Text>
+
+              {item.status === 'error' && (
+                <View style={styles.retryRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.retryBtn}
+                    onPress={handleManualSync}
+                  >
+                    <Text style={styles.retryBtnText}>Reintentar</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </Card>
           ))}
+
+        {/* Prominent Primary Button */}
+        <View style={styles.bottomSection}>
+          <ActionButton
+            label={isSyncing ? 'Sincronizando...' : 'Sincronizar ahora'}
+            icon="cloud_sync"
+            variant="primary"
+            onPress={handleManualSync}
+            disabled={isSyncing}
+          />
         </View>
       </ScrollView>
     </View>
@@ -129,79 +321,90 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.margin,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl + 20,
-    gap: spacing.lg,
-  },
-  summaryCard: {
     gap: spacing.md,
   },
-  summaryTop: {
+  offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: 'rgba(245, 165, 36, 0.15)',
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 165, 36, 0.3)',
   },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: spacing.radius.lg,
-    backgroundColor: colors.primaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryInfo: {
+  offlineBannerText: {
+    ...typography.bodyMedium,
+    color: '#F5A524',
     flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
   },
-  summaryTitle: {
-    ...typography.headlineSm,
-    color: colors.onSurface,
+  summaryRow: {
+    marginTop: spacing.xs,
   },
-  summarySubtitle: {
-    ...typography.bodySm,
+  summaryText: {
+    ...typography.labelMedium,
     color: colors.onSurfaceVariant,
-    marginTop: 2,
+    fontWeight: '600',
   },
-  listSection: {
-    gap: spacing.sm + 2,
+  itemCard: {
+    padding: spacing.md,
+    gap: 4,
   },
-  sectionTitle: {
-    ...typography.labelSm,
-    color: colors.onSurfaceVariant,
-    letterSpacing: 0.6,
-  },
-  queueCard: {
-    gap: spacing.md,
-  },
-  cardHeader: {
+  itemHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
-  },
-  itemTitleCol: {
-    flex: 1,
-    marginRight: spacing.sm,
+    alignItems: 'center',
+    marginBottom: 4,
   },
   itemTitle: {
-    ...typography.labelLg,
+    ...typography.bodyMedium,
     color: colors.onSurface,
+    fontWeight: '700',
   },
-  itemType: {
-    ...typography.bodySm,
+  itemDevice: {
+    ...typography.bodyMedium,
     color: colors.onSurfaceVariant,
-    marginTop: 2,
   },
-  cardFooter: {
+  itemMeta: {
+    ...typography.labelSmall,
+    color: colors.outline,
+    fontSize: 11,
+  },
+  retryRow: {
+    alignItems: 'flex-end',
+    marginTop: spacing.sm,
+  },
+  retryBtn: {
+    backgroundColor: colors.surfaceContainerHighest,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 8,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  retryBtnText: {
+    ...typography.labelMedium,
+    color: colors.onSurface,
+    fontWeight: '600',
+  },
+  conflictBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceStroke,
-    paddingTop: spacing.sm,
+    gap: 6,
+    backgroundColor: 'rgba(245, 165, 36, 0.12)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: spacing.xs,
   },
-  footerText: {
-    ...typography.bodySm,
-    color: colors.muted,
+  conflictBtnText: {
+    ...typography.labelSmall,
+    color: '#F5A524',
+    fontWeight: '700',
   },
-  resolveBtn: {
-    height: 36,
-    paddingHorizontal: spacing.sm + 4,
+  bottomSection: {
+    marginTop: spacing.lg,
   },
 });

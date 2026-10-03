@@ -1,24 +1,64 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
-import { StatusHeader, Card, ActionButton } from '../../core/ui';
+import { StatusHeader, Card, ActionButton, Icon } from '../../core/ui';
+import { RootStackParamList } from '../../core/navigation/types';
+import { SyncWorker, conflictStore } from '../../sync/SyncWorker';
 
 export const SyncConflictScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'SyncConflict'>>();
+  const conflictId = route.params?.conflictId || 'default-conflict';
+
+  const [isResolving, setIsResolving] = useState<boolean>(false);
+
+  // Retrieve stored conflict or use mockup defaults
+  const activeConflict = conflictStore.get(conflictId);
+
+  const localNotes =
+    activeConflict?.localVersion?.notes ||
+    'Equipo instalado en rack 2. Enlace de fibra verificado. Se reemplazó el router anterior.';
+  const localDevice =
+    activeConflict?.localVersion?.deviceName || 'Router MikroTik hAP ac2';
+
+  const serverNotes =
+    activeConflict?.serverVersion?.notes ||
+    'Equipo registrado en Nodo Central. Notas distintas a las locales.';
+  const serverDevice =
+    activeConflict?.serverVersion?.deviceName || 'Router MikroTik hAP ac2';
+
+  const handleResolve = async (resolution: 'keep_local' | 'use_server') => {
+    setIsResolving(true);
+    try {
+      await SyncWorker.resolveConflict(conflictId, resolution);
+      Alert.alert(
+        'Conflicto resuelto',
+        resolution === 'keep_local'
+          ? 'Se mantendrán los datos locales para la sincronización.'
+          : 'Se aplicó la versión del servidor en el dispositivo.',
+        [{ text: 'Aceptar', onPress: () => navigation.goBack() }]
+      );
+    } catch (err: any) {
+      Alert.alert('Error', 'No se pudo resolver el conflicto: ' + err.message);
+    } finally {
+      setIsResolving(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
       <StatusHeader
         title="Conflicto de sincronización"
-        isOnline={false}
         showBack
         onPressBack={() => navigation.goBack()}
       />
@@ -29,48 +69,51 @@ export const SyncConflictScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         <Card style={styles.dialogCard} variant="high">
-          <Text style={styles.dialogTitle}>Conflicto de sincronización</Text>
-          <Text style={styles.dialogSubtitle}>
-            Este registro fue modificado en el servidor.
-          </Text>
+          <View style={styles.dialogHeader}>
+            <View style={styles.warningCircle}>
+              <Icon name="warning" size={24} color="#F5A524" />
+            </View>
+            <Text style={styles.dialogTitle}>Conflicto de sincronización</Text>
+            <Text style={styles.dialogSubtitle}>
+              Este registro fue modificado en el servidor.
+            </Text>
+          </View>
 
-          {/* Local Version */}
+          {/* Local Version Card */}
           <View style={styles.versionBox}>
             <View style={styles.versionHeader}>
-              <Text style={styles.versionTag}>VERSIÓN LOCAL</Text>
+              <Text style={styles.versionTagLocal}>VERSIÓN LOCAL</Text>
               <Text style={styles.versionTime}>Hoy 10:42</Text>
             </View>
-            <Text style={styles.deviceTitle}>Router MikroTik hAP ac2</Text>
-            <Text style={styles.deviceNotes}>
-              Equipo instalado en rack 2. Enlace de fibra verificado. Se reemplazó el router anterior.
-            </Text>
+            <Text style={styles.deviceTitle}>{localDevice}</Text>
+            <Text style={styles.deviceNotes}>{localNotes}</Text>
           </View>
 
-          {/* Server Version */}
+          {/* Server Version Card */}
           <View style={styles.versionBox}>
             <View style={styles.versionHeader}>
-              <Text style={styles.versionTag}>VERSIÓN DEL SERVIDOR</Text>
+              <Text style={styles.versionTagServer}>VERSIÓN DEL SERVIDOR</Text>
               <Text style={styles.versionTime}>Hoy 10:45</Text>
             </View>
-            <Text style={styles.deviceTitle}>Router MikroTik hAP ac2</Text>
-            <Text style={styles.deviceNotes}>
-              Equipo registrado en Nodo Central. Notas distintas a las locales.
-            </Text>
+            <Text style={styles.deviceTitle}>{serverDevice}</Text>
+            <Text style={styles.deviceNotes}>{serverNotes}</Text>
           </View>
 
-          {/* Conflict Resolution Actions */}
-          <View style={styles.actionRow}>
+          {/* Action Buttons */}
+          <View style={styles.actionsRow}>
             <ActionButton
               label="Mantener mía"
               variant="secondary"
-              onPress={() => navigation.goBack()}
+              onPress={() => handleResolve('keep_local')}
               style={styles.halfBtn}
+              disabled={isResolving}
             />
             <ActionButton
               label="Usar servidor"
               variant="primary"
-              onPress={() => navigation.goBack()}
+              onPress={() => handleResolve('use_server')}
               style={styles.halfBtn}
+              disabled={isResolving}
             />
           </View>
         </Card>
@@ -90,58 +133,84 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.margin,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xxl + 20,
+    justifyContent: 'center',
   },
   dialogCard: {
+    padding: spacing.lg,
     gap: spacing.md,
-    marginTop: spacing.xl,
+  },
+  dialogHeader: {
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: spacing.xs,
+  },
+  warningCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(245, 165, 36, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
   dialogTitle: {
-    ...typography.headlineSm,
+    ...typography.headlineSmall,
     color: colors.onSurface,
     textAlign: 'center',
+    fontWeight: '700',
   },
   dialogSubtitle: {
-    ...typography.bodySm,
+    ...typography.bodyMedium,
     color: colors.onSurfaceVariant,
     textAlign: 'center',
   },
   versionBox: {
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: spacing.radius.lg,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 12,
     padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceStroke,
     gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.surfaceContainerHighest,
   },
   versionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  versionTag: {
-    ...typography.labelSm,
+  versionTagLocal: {
+    ...typography.labelSmall,
+    color: colors.secondary,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  versionTagServer: {
+    ...typography.labelSmall,
     color: colors.primary,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   versionTime: {
-    ...typography.bodySm,
-    color: colors.muted,
+    ...typography.labelSmall,
+    color: colors.onSurfaceVariant,
   },
   deviceTitle: {
-    ...typography.labelLg,
+    ...typography.labelLarge,
     color: colors.onSurface,
+    fontWeight: '600',
   },
   deviceNotes: {
-    ...typography.bodySm,
+    ...typography.bodySmall,
     color: colors.onSurfaceVariant,
     lineHeight: 18,
   },
-  actionRow: {
+  actionsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   halfBtn: {
     flex: 1,
+    minHeight: 48,
   },
 });
