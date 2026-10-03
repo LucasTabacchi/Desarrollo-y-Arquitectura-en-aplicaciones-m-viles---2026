@@ -28,6 +28,7 @@ export type RootStackParamList = {
     step?: number;
     initialIp?: string;
     initialMac?: string;
+    initialDeviceName?: string;
   };
   PdfPreview: {
     filePath: string;

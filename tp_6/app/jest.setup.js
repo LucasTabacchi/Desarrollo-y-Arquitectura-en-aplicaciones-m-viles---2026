@@ -106,4 +106,33 @@ jest.mock('@dylankenneally/react-native-ssh-sftp', () => {
   };
 });
 
+jest.mock('@react-native-community/geolocation', () => ({
+  getCurrentPosition: jest.fn((success) =>
+    success({
+      coords: {
+        latitude: -32.4825,
+        longitude: -58.2321,
+        accuracy: 4.5,
+      },
+    })
+  ),
+  requestAuthorization: jest.fn(),
+  setRNConfiguration: jest.fn(),
+}));
+
+jest.mock('react-native-vision-camera', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    Camera: View,
+    useCameraDevice: jest.fn(() => ({ id: 'back', position: 'back' })),
+    useCameraPermission: jest.fn(() => ({
+      hasPermission: true,
+      requestPermission: jest.fn(async () => true),
+    })),
+    useCodeScanner: jest.fn(() => ({})),
+  };
+});
+
+
 
