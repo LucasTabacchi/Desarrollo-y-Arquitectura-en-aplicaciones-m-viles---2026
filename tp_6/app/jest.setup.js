@@ -27,9 +27,18 @@ jest.mock('react-native-screens', () => {
 
 jest.mock('@op-engineering/op-sqlite', () => ({
   open: jest.fn(() => ({
-    executeAsync: jest.fn(async () => ({ rows: { _array: [] }, rowsAffected: 0 })),
-    executeBatchAsync: jest.fn(async () => {}),
-    transaction: jest.fn(async (cb) => cb({ executeAsync: jest.fn(), executeBatchAsync: jest.fn() })),
-    close: jest.fn(async () => {}),
+    execute: jest.fn(async () => ({ rows: [], rowsAffected: 0 })),
+    executeBatch: jest.fn(async () => {}),
+    transaction: jest.fn(async (cb) => cb({ execute: jest.fn() })),
+    closeAsync: jest.fn(async () => {}),
+  })),
+}));
+
+jest.mock('react-native-udp', () => ({
+  createSocket: jest.fn(() => ({
+    bind: jest.fn((port, addr, cb) => cb && cb()),
+    send: jest.fn((data, offset, length, port, addr, cb) => cb && cb()),
+    on: jest.fn(),
+    close: jest.fn(),
   })),
 }));

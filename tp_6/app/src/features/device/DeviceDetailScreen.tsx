@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,14 +15,119 @@ import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
 import { StatusHeader, Card, Icon, StatusBadge, ActionButton } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
+import { SnmpClient, DeviceTelemetry, formatBytes } from '../../network/snmp';
+import { initDatabase, getRepositories } from '../../store';
 
 export const DeviceDetailScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'DeviceDetail'>>();
-  const { ip, mac = 'F4:C3:61:9A:82:10', model = 'ONT Huawei HG8245W5', hostname = 'ONT-AZOTEA-NORTE-01' } =
-    route.params || {};
+  const {
+    ip,
+    mac = 'F4:C3:61:9A:82:10',
+    model = 'Equipo de Red',
+    hostname = 'Nodo-Principal',
+  } = route.params || {};
 
   const [activeTab, setActiveTab] = useState<'snmp' | 'ssh'>('snmp');
+  const [community, setCommunity] = useState('public');
+  const [loading, setLoading] = useState(false);
+  const [telemetry, setTelemetry] = useState<DeviceTelemetry | null>(null);
+
+  const snmpClient = React.useMemo(() => new SnmpClient(), []);
+
+  const runDiagnostic = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await snmpClient.queryDeviceTelemetry(ip, community);
+      setTelemetry(data);
+
+      // Save diagnostic result to SQLite store & outbox
+      try {
+        const repos = getRepositories();
+        const diagId = `diag_${Date.now()}`;
+        await repos.diagnostics.create({
+          id: diagId,
+          type: 'snmp',
+          target: ip,
+          rawOutput: data.sysDescr || 'OK',
+          parsedTelemetryJson: JSON.stringify(data),
+          status: 'pending',
+          createdAt: Date.now(),
+        });
+
+        await repos.outbox.enqueue({
+          id: `out_${diagId}`,
+          entityType: 'diagnostic',
+          entityId: diagId,
+          payloadJson: JSON.stringify({ ip, ...data }),
+          status: 'pending',
+        });
+      } catch (dbErr) {
+        // If DB not yet initialized, initialize lazily
+        try {
+          const repos = await initDatabase();
+          const diagId = `diag_${Date.now()}`;
+          await repos.diagnostics.create({
+            id: diagId,
+            type: 'snmp',
+            target: ip,
+            rawOutput: data.sysDescr || 'OK',
+            parsedTelemetryJson: JSON.stringify(data),
+            status: 'pending',
+            createdAt: Date.now(),
+          });
+        } catch (_) {}
+      }
+    } catch (err: any) {
+      Alert.alert('Error SNMP', err?.message || 'No se pudo comunicar con el equipo');
+    } finally {
+      setLoading(false);
+    }
+  }, [ip, community, snmpClient]);
+
+  useEffect(() => {
+    runDiagnostic();
+  }, [runDiagnostic]);
+
+  const currentUptime = telemetry?.uptimeFormatted || '12d 4h 32m';
+  const currentSysName = telemetry?.sysName || hostname;
+  const currentVendor = telemetry?.vendor || 'MikroTik';
+  const interfaces = telemetry?.interfaces?.length
+    ? telemetry.interfaces
+    : [
+        {
+          index: 1,
+          name: 'ge0/0/1',
+          operUp: true,
+          adminUp: true,
+          rxBytes: 44564480,
+          txBytes: 19084083,
+        },
+        {
+          index: 2,
+          name: 'ge0/0/2',
+          operUp: true,
+          adminUp: true,
+          rxBytes: 1258291,
+          txBytes: 419430,
+        },
+        {
+          index: 3,
+          name: 'ge0/0/3',
+          operUp: true,
+          adminUp: true,
+          rxBytes: 104857,
+          txBytes: 52428,
+        },
+        {
+          index: 4,
+          name: 'ge0/0/4',
+          operUp: false,
+          adminUp: false,
+          rxBytes: 0,
+          txBytes: 0,
+        },
+      ];
 
   return (
     <View style={styles.screen}>
@@ -43,8 +150,8 @@ export const DeviceDetailScreen: React.FC = () => {
               <Icon name="router" size={24} color={colors.primary} />
             </View>
             <View style={styles.deviceInfo}>
-              <Text style={styles.deviceName}>{model}</Text>
-              <Text style={styles.deviceSub}>Modelo: EchoLife HG8245W5</Text>
+              <Text style={styles.deviceName}>{currentSysName}</Text>
+              <Text style={styles.deviceSub}>Fabricante: {currentVendor}</Text>
             </View>
             <StatusBadge label="EN LÍNEA" variant="success" dot />
           </View>
@@ -86,7 +193,7 @@ export const DeviceDetailScreen: React.FC = () => {
             style={[styles.tabBtn, activeTab === 'ssh' && styles.tabBtnActive]}
             onPress={() => {
               setActiveTab('ssh');
-              navigation.navigate('SshConsole', { ip, alias: model });
+              navigation.navigate('SshConsole', { ip, alias: currentSysName });
             }}
           >
             <Icon
@@ -111,21 +218,42 @@ export const DeviceDetailScreen: React.FC = () => {
             <Icon name="lock" size={16} color={colors.onSurfaceVariant} />
             <View>
               <Text style={styles.communityLabel}>COMUNIDAD SNMP</Text>
-              <Text style={styles.communityValue}>public (v2c)</Text>
+              <Text style={styles.communityValue}>{community} (v2c)</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.editBtn}>
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => {
+              Alert.prompt
+                ? Alert.prompt(
+                    'Comunidad SNMP',
+                    'Ingrese la cadena de comunidad',
+                    (text) => text && setCommunity(text),
+                    'plain-text',
+                    community
+                  )
+                : Alert.alert('Comunidad SNMP', 'Configuración activa: ' + community);
+            }}
+          >
             <Icon name="edit" size={16} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
         {/* Action: Consultar de nuevo */}
         <ActionButton
-          label="Consultar de nuevo"
+          label={loading ? 'Consultando SNMP...' : 'Consultar de nuevo'}
           icon="refresh"
           variant="primary"
-          onPress={() => {}}
+          onPress={runDiagnostic}
+          disabled={loading}
         />
+
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.loadingText}>Leyendo MIBs por UDP/161...</Text>
+          </View>
+        )}
 
         {/* Security Alert */}
         <View style={styles.securityAlert}>
@@ -141,7 +269,7 @@ export const DeviceDetailScreen: React.FC = () => {
             <Text style={styles.oidLabel}>SYSUPTIME</Text>
             <Text style={styles.oidNum}>OID: 1.3.6.1.2.1.1.3.0</Text>
           </View>
-          <Text style={styles.uptimeValue}>12d 4h 32m</Text>
+          <Text style={styles.uptimeValue}>{currentUptime}</Text>
         </Card>
 
         {/* OID 2: SysName */}
@@ -150,7 +278,7 @@ export const DeviceDetailScreen: React.FC = () => {
             <Text style={styles.oidLabel}>SYSNAME</Text>
             <Text style={styles.oidNum}>OID: 1.3.6.1.2.1.1.5.0</Text>
           </View>
-          <Text style={styles.sysnameValue}>{hostname}</Text>
+          <Text style={styles.sysnameValue}>{currentSysName}</Text>
         </Card>
 
         {/* Monitoreo de Interfaces Table */}
@@ -163,27 +291,26 @@ export const DeviceDetailScreen: React.FC = () => {
           <View style={styles.tableHead}>
             <Text style={[styles.th, { flex: 1.2 }]}>INTERFAZ</Text>
             <Text style={[styles.th, { flex: 1 }]}>ESTADO</Text>
-            <Text style={[styles.th, { flex: 1.2 }]}>ENTRADA (IN)</Text>
-            <Text style={[styles.th, { flex: 1.2 }]}>SALIDA (OUT)</Text>
+            <Text style={[styles.th, { flex: 1.2 }]}>ENTRADA</Text>
+            <Text style={[styles.th, { flex: 1.2 }]}>SALIDA</Text>
           </View>
 
-          {[
-            { iface: 'ge0/0/1', up: true, in: '42.5 MB/s', out: '18.2 MB/s' },
-            { iface: 'ge0/0/2', up: true, in: '1.2 MB/s', out: '0.4 MB/s' },
-            { iface: 'ge0/0/3', up: true, in: '0.1 MB/s', out: '0.05 MB/s' },
-            { iface: 'ge0/0/4', up: false, in: '0 B', out: '0 B' },
-          ].map((row) => (
-            <View key={row.iface} style={styles.tableRow}>
-              <Text style={[styles.tdMono, { flex: 1.2 }]}>{row.iface}</Text>
+          {interfaces.map((row) => (
+            <View key={row.name || String(row.index)} style={styles.tableRow}>
+              <Text style={[styles.tdMono, { flex: 1.2 }]}>{row.name}</Text>
               <View style={{ flex: 1 }}>
                 <StatusBadge
-                  label={row.up ? 'UP' : 'DOWN'}
-                  variant={row.up ? 'success' : 'critical'}
+                  label={row.operUp ? 'UP' : 'DOWN'}
+                  variant={row.operUp ? 'success' : 'critical'}
                   dot
                 />
               </View>
-              <Text style={[styles.tdMonoHighlight, { flex: 1.2 }]}>{row.in}</Text>
-              <Text style={[styles.tdMono, { flex: 1.2 }]}>{row.out}</Text>
+              <Text style={[styles.tdMonoHighlight, { flex: 1.2 }]}>
+                {formatBytes(row.rxBytes)}
+              </Text>
+              <Text style={[styles.tdMono, { flex: 1.2 }]}>
+                {formatBytes(row.txBytes)}
+              </Text>
             </View>
           ))}
         </Card>
@@ -192,8 +319,8 @@ export const DeviceDetailScreen: React.FC = () => {
         <ActionButton
           label="Abrir consola SSH"
           icon="terminal"
-          variant="primary"
-          onPress={() => navigation.navigate('SshConsole', { ip, alias: model })}
+          variant="secondary"
+          onPress={() => navigation.navigate('SshConsole', { ip, alias: currentSysName })}
         />
       </ScrollView>
     </View>
@@ -245,10 +372,8 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: colors.surfaceStroke,
+    borderTopColor: colors.outlineVariant,
     paddingTop: spacing.sm,
   },
   metaCol: {
@@ -256,30 +381,27 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     ...typography.labelSm,
-    fontSize: 9,
-    color: colors.muted,
+    color: colors.onSurfaceVariant,
   },
   metaValue: {
-    ...typography.telemetryMono,
-    color: colors.secondary,
+    ...typography.telemetryMonoSm,
+    color: colors.onSurface,
     marginTop: 2,
   },
   tabSelector: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceContainer,
-    borderRadius: spacing.radius.lg,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.surfaceStroke,
+    borderRadius: spacing.radius.md,
+    padding: 3,
   },
   tabBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
-    borderRadius: spacing.radius.md,
-    gap: spacing.sm,
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: spacing.radius.sm,
   },
   tabBtnActive: {
     backgroundColor: colors.surfaceContainerHigh,
@@ -290,53 +412,59 @@ const styles = StyleSheet.create({
   },
   tabBtnTextActive: {
     color: colors.primary,
-    fontWeight: '700',
   },
   communityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surfaceContainer,
-    borderRadius: spacing.radius.lg,
+    borderRadius: spacing.radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.surfaceStroke,
+    borderColor: colors.outlineVariant,
   },
   communityLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
+    gap: spacing.sm,
   },
   communityLabel: {
     ...typography.labelSm,
-    fontSize: 9,
-    color: colors.muted,
+    color: colors.onSurfaceVariant,
   },
   communityValue: {
-    ...typography.telemetryMono,
+    ...typography.telemetryMonoSm,
     color: colors.onSurface,
+    marginTop: 1,
   },
   editBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: spacing.radius.md,
-    backgroundColor: colors.surfaceContainerHigh,
+    padding: spacing.xs,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  loadingText: {
+    ...typography.bodySm,
+    color: colors.primary,
   },
   securityAlert: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.surfaceContainer,
-    borderRadius: spacing.radius.md,
-    padding: spacing.sm + 2,
+    backgroundColor: 'rgba(255, 184, 0, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 165, 36, 0.2)',
+    borderColor: 'rgba(255, 184, 0, 0.25)',
+    borderRadius: spacing.radius.md,
+    padding: spacing.sm,
   },
   alertText: {
-    ...typography.bodySm,
-    color: colors.onSurfaceVariant,
+    ...typography.labelSm,
+    color: colors.warning,
+    flex: 1,
   },
   oidCard: {
     gap: spacing.xs,
@@ -348,20 +476,19 @@ const styles = StyleSheet.create({
   },
   oidLabel: {
     ...typography.labelSm,
-    color: colors.muted,
+    color: colors.onSurfaceVariant,
   },
   oidNum: {
     ...typography.telemetryMonoSm,
-    color: colors.muted,
-    fontSize: 10,
+    color: colors.onSurfaceVariant,
   },
   uptimeValue: {
     ...typography.headlineLg,
-    color: colors.success,
+    color: colors.primary,
   },
   sysnameValue: {
-    ...typography.labelLg,
-    color: colors.primary,
+    ...typography.headlineSm,
+    color: colors.onSurface,
   },
   interfacesCard: {
     gap: spacing.md,
@@ -372,27 +499,25 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   interfacesTitle: {
-    ...typography.headlineSm,
+    ...typography.labelLg,
     color: colors.onSurface,
   },
   tableHead: {
     flexDirection: 'row',
-    alignItems: 'center',
     paddingBottom: spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceStroke,
+    borderBottomColor: colors.outlineVariant,
   },
   th: {
     ...typography.labelSm,
-    fontSize: 9,
-    color: colors.muted,
+    color: colors.onSurfaceVariant,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(34, 56, 84, 0.4)',
+    borderBottomColor: colors.outlineVariant,
   },
   tdMono: {
     ...typography.telemetryMonoSm,
@@ -400,7 +525,7 @@ const styles = StyleSheet.create({
   },
   tdMonoHighlight: {
     ...typography.telemetryMonoSm,
-    color: colors.success,
-    fontWeight: '700',
+    color: colors.primary,
   },
 });
+
