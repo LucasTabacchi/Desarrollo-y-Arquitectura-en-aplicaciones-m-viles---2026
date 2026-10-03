@@ -1,21 +1,84 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
 import { StatusHeader, Card, Icon, StatusBadge, ActionButton } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
+import { getRepositories } from '../../store';
+import { Installation } from '../../store/models';
+
+const SAMPLE_INSTALLATIONS: Array<{
+  id: string;
+  deviceName: string;
+  siteName: string;
+  dateStr: string;
+  status: 'synced' | 'pending' | 'conflict';
+  pdfPath: string;
+}> = [
+  {
+    id: 'sample-1',
+    deviceName: 'Router MikroTik hAP ac2',
+    siteName: 'Sitio Azotea Norte',
+    dateStr: '02/10/2026',
+    status: 'pending',
+    pdfPath: 'reporte_mikrotik_hap_ac2.pdf',
+  },
+  {
+    id: 'sample-2',
+    deviceName: 'ONT Huawei HG8245W5',
+    siteName: 'Sitio Azotea Norte',
+    dateStr: '01/10/2026',
+    status: 'synced',
+    pdfPath: 'reporte_ont_huawei_hg8245w5.pdf',
+  },
+  {
+    id: 'sample-3',
+    deviceName: 'Antena Ubiquiti LiteBeam',
+    siteName: 'Sitio Azotea Norte',
+    dateStr: '28/09/2026',
+    status: 'synced',
+    pdfPath: 'reporte_antena_ubiquiti.pdf',
+  },
+];
 
 export const InstallationsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const isFocused = useIsFocused();
+  const [installations, setInstallations] = useState<Installation[]>([]);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const loadData = async () => {
+    try {
+      const repos = getRepositories();
+      const list = await repos.installations.listAll();
+      setInstallations(list);
+    } catch {
+      // In initial mock or uninitialized state, fall back to empty list
+      setInstallations([]);
+    }
+  };
+
+  useEffect(() => {
+    if (isFocused) {
+      loadData();
+    }
+  }, [isFocused]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   return (
     <View style={styles.screen}>
@@ -28,11 +91,18 @@ export const InstallationsScreen: React.FC = () => {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
-        {/* Primary CTA */}
+        {/* Primary Action Button */}
         <ActionButton
-          label="Nueva instalación de campo"
-          icon="add_task"
+          label="Nueva instalación"
+          icon="add"
           variant="primary"
           onPress={() => navigation.navigate('NewInstallation', { step: 1 })}
         />
@@ -40,89 +110,112 @@ export const InstallationsScreen: React.FC = () => {
         <View style={styles.listSection}>
           <Text style={styles.sectionTitle}>REGISTROS DE INSTALACIÓN</Text>
 
-          {/* Installation Item 1 */}
-          <Card style={styles.itemCard}>
-            <View style={styles.itemTop}>
-              <View style={styles.deviceRow}>
-                <View style={styles.iconBox}>
-                  <Icon name="router" size={20} color={colors.primary} />
+          {/* Database Items */}
+          {installations.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.8}
+              onPress={() =>
+                navigation.navigate('PdfPreview', {
+                  filePath: item.pdfPath || `reporte_${item.id}.pdf`,
+                  title: `Reporte de Instalación - ${item.deviceName}`,
+                })
+              }
+            >
+              <Card style={styles.itemCard} variant="surface">
+                <View style={styles.itemTop}>
+                  <View style={styles.deviceRow}>
+                    <View style={styles.iconBox}>
+                      <Icon name="router" size={20} color={colors.primary} />
+                    </View>
+                    <View style={styles.deviceInfo}>
+                      <Text style={styles.deviceName}>{item.deviceName}</Text>
+                      <Text style={styles.siteInfo}>
+                        {item.siteName} • {item.deviceIp}
+                      </Text>
+                    </View>
+                  </View>
+                  <StatusBadge
+                    label={item.status === 'synced' ? 'Sincronizado' : 'Pendiente'}
+                    variant={item.status === 'synced' ? 'success' : 'warning'}
+                    dot
+                  />
                 </View>
-                <View style={styles.deviceInfo}>
-                  <Text style={styles.deviceName}>Router MikroTik hAP ac2</Text>
-                  <Text style={styles.siteInfo}>Sitio Azotea Norte • Rack 2</Text>
+
+                <View style={styles.evidenceRow}>
+                  <View style={styles.evidenceItem}>
+                    <Icon name="place" size={14} color={colors.onSurfaceVariant} />
+                    <Text style={styles.evidenceText}>
+                      {item.gpsLat && item.gpsLng
+                        ? `${item.gpsLat.toFixed(4)}, ${item.gpsLng.toFixed(4)}`
+                        : '-32.4825, -58.2372'}
+                    </Text>
+                  </View>
+                  <View style={styles.evidenceItem}>
+                    <Icon name="photo_camera" size={14} color={colors.onSurfaceVariant} />
+                    <Text style={styles.evidenceText}>
+                      {item.photos?.length || 3} fotos
+                    </Text>
+                  </View>
+                  <View style={styles.evidenceItem}>
+                    <Icon name="picture_as_pdf" size={14} color={colors.primary} />
+                    <Text style={[styles.evidenceText, { color: colors.primary }]}>
+                      Ver PDF
+                    </Text>
+                  </View>
                 </View>
-              </View>
-              <StatusBadge label="PDF Generado" variant="success" dot />
-            </View>
+              </Card>
+            </TouchableOpacity>
+          ))}
 
-            <View style={styles.evidenceRow}>
-              <View style={styles.evidenceItem}>
-                <Icon name="place" size={14} color={colors.onSurfaceVariant} />
-                <Text style={styles.evidenceText}>-32.4825, -58.2372</Text>
-              </View>
-              <View style={styles.evidenceItem}>
-                <Icon name="pending_actions" size={14} color={colors.onSurfaceVariant} />
-                <Text style={styles.evidenceText}>3 fotos adjuntas</Text>
-              </View>
-            </View>
-
-            <View style={styles.cardActions}>
-              <ActionButton
-                label="Ver Reporte PDF"
-                variant="secondary"
-                icon="terminal"
+          {/* Default Sample Items when list is empty or minimal */}
+          {installations.length === 0 &&
+            SAMPLE_INSTALLATIONS.map((sample) => (
+              <TouchableOpacity
+                key={sample.id}
+                activeOpacity={0.8}
                 onPress={() =>
                   navigation.navigate('PdfPreview', {
-                    filePath: 'mock-report-mikrotik.pdf',
-                    title: 'Reporte de Instalación #1042',
+                    filePath: sample.pdfPath,
+                    title: `Reporte de Instalación - ${sample.deviceName}`,
                   })
                 }
-                style={styles.actionBtnSmall}
-              />
-            </View>
-          </Card>
+              >
+                <Card style={styles.itemCard} variant="surface">
+                  <View style={styles.itemTop}>
+                    <View style={styles.deviceRow}>
+                      <View style={styles.iconBox}>
+                        <Icon name="router" size={20} color={colors.primary} />
+                      </View>
+                      <View style={styles.deviceInfo}>
+                        <Text style={styles.deviceName}>{sample.deviceName}</Text>
+                        <Text style={styles.siteInfo}>{sample.siteName}</Text>
+                      </View>
+                    </View>
+                    <StatusBadge
+                      label={sample.status === 'synced' ? 'Sincronizado' : 'Pendiente'}
+                      variant={sample.status === 'synced' ? 'success' : 'warning'}
+                      dot
+                    />
+                  </View>
 
-          {/* Installation Item 2 */}
-          <Card style={styles.itemCard}>
-            <View style={styles.itemTop}>
-              <View style={styles.deviceRow}>
-                <View style={styles.iconBox}>
-                  <Icon name="antenna" size={20} color={colors.secondary} />
-                </View>
-                <View style={styles.deviceInfo}>
-                  <Text style={styles.deviceName}>Antena Ubiquiti LiteBeam</Text>
-                  <Text style={styles.siteInfo}>Torre Principal • Enlace 5GHz</Text>
-                </View>
-              </View>
-              <StatusBadge label="Pendiente Sync" variant="warning" dot />
-            </View>
-
-            <View style={styles.evidenceRow}>
-              <View style={styles.evidenceItem}>
-                <Icon name="place" size={14} color={colors.onSurfaceVariant} />
-                <Text style={styles.evidenceText}>-32.4811, -58.2360</Text>
-              </View>
-              <View style={styles.evidenceItem}>
-                <Icon name="pending_actions" size={14} color={colors.onSurfaceVariant} />
-                <Text style={styles.evidenceText}>2 fotos adjuntas</Text>
-              </View>
-            </View>
-
-            <View style={styles.cardActions}>
-              <ActionButton
-                label="Ver Reporte PDF"
-                variant="secondary"
-                icon="terminal"
-                onPress={() =>
-                  navigation.navigate('PdfPreview', {
-                    filePath: 'mock-report-ubiquiti.pdf',
-                    title: 'Reporte de Instalación #1041',
-                  })
-                }
-                style={styles.actionBtnSmall}
-              />
-            </View>
-          </Card>
+                  <View style={styles.evidenceRow}>
+                    <View style={styles.evidenceItem}>
+                      <Icon name="place" size={14} color={colors.onSurfaceVariant} />
+                      <Text style={styles.evidenceText}>-32.4825, -58.2372</Text>
+                    </View>
+                    <View style={styles.evidenceItem}>
+                      <Icon name="photo_camera" size={14} color={colors.onSurfaceVariant} />
+                      <Text style={styles.evidenceText}>3 fotos</Text>
+                    </View>
+                    <View style={styles.evidenceItem}>
+                      <Icon name="event" size={14} color={colors.onSurfaceVariant} />
+                      <Text style={styles.evidenceText}>{sample.dateStr}</Text>
+                    </View>
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            ))}
         </View>
       </ScrollView>
     </View>
@@ -141,35 +234,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.margin,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl + 20,
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   listSection: {
-    gap: spacing.sm + 2,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   sectionTitle: {
-    ...typography.labelSm,
+    ...typography.labelMedium,
     color: colors.onSurfaceVariant,
-    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   itemCard: {
+    padding: spacing.md,
     gap: spacing.md,
   },
   itemTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   deviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
+    gap: spacing.sm,
     flex: 1,
   },
   iconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: spacing.radius.md,
-    backgroundColor: colors.surfaceContainerHigh,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -177,35 +273,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deviceName: {
-    ...typography.labelLg,
+    ...typography.bodyMedium,
     color: colors.onSurface,
+    fontWeight: '700',
   },
   siteInfo: {
-    ...typography.bodySm,
+    ...typography.labelSmall,
     color: colors.onSurfaceVariant,
     marginTop: 2,
   },
   evidenceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surfaceContainerLowest,
-    padding: spacing.sm,
-    borderRadius: spacing.radius.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.surfaceContainerHighest,
   },
   evidenceItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   evidenceText: {
-    ...typography.telemetryMonoSm,
+    ...typography.labelSmall,
     color: colors.onSurfaceVariant,
-  },
-  cardActions: {
-    paddingTop: 2,
-  },
-  actionBtnSmall: {
-    height: 44,
+    fontFamily: 'monospace',
   },
 });

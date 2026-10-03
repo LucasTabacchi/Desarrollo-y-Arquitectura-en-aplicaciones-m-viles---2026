@@ -134,5 +134,29 @@ jest.mock('react-native-vision-camera', () => {
   };
 });
 
+jest.mock('react-native-html-to-pdf', () => ({
+  convert: jest.fn(async (options) => ({
+    filePath: `/data/user/0/com.fcyt.netdiag/files/${options.fileName || 'report'}.pdf`,
+    base64: 'JVBERi0xLjQK...',
+    numberOfPages: 1,
+  })),
+}));
+
+jest.mock('react-native-pdf', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return React.forwardRef((props, ref) => React.createElement(View, { ...props, testID: 'mock-pdf-view' }));
+});
+
+jest.mock('react-native-blob-util', () => ({
+  fs: {
+    dirs: {
+      DocumentDir: '/data/user/0/com.fcyt.netdiag/files',
+      DownloadDir: '/storage/emulated/0/Download',
+    },
+    cp: jest.fn(async () => true),
+  },
+}));
+
 
 

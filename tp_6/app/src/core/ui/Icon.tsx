@@ -28,7 +28,16 @@ export type IconName =
   | 'delete'
   | 'refresh'
   | 'lock'
-  | 'copy';
+  | 'copy'
+  | 'add'
+  | 'photo_camera'
+  | 'add_a_photo'
+  | 'satellite_alt'
+  | 'sync'
+  | 'check'
+  | 'description'
+  | 'picture_as_pdf'
+  | 'event';
 
 interface IconProps {
   name: IconName;
@@ -219,6 +228,60 @@ export const Icon: React.FC<IconProps> = ({
         <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
           <Rect x="9" y="9" width="13" height="13" rx="2" stroke={color} strokeWidth="2" />
           <Path d="M5 15H4C2.9 15 2 14.1 2 13V4C2 2.9 2.9 2 4 2H13C14.1 2 15 2.9 15 4V5" stroke={color} strokeWidth="2" />
+        </Svg>
+      );
+    case 'add':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Path d="M12 5V19M5 12H19" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'photo_camera':
+    case 'add_a_photo':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Path d="M23 19C23 20.1 22.1 21 21 21H3C1.9 21 1 20.1 1 19V8C1 6.9 1.9 6 3 6H7L9 3H15L17 6H21C22.1 6 23 6.9 23 8V19Z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <Circle cx="12" cy="13" r="4" stroke={color} strokeWidth="2" />
+        </Svg>
+      );
+    case 'satellite_alt':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="2" />
+          <Path d="M12 3C16.97 3 21 7.03 21 12" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <Path d="M12 7C14.76 7 17 9.24 17 12" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <Circle cx="12" cy="12" r="2" fill={color} />
+        </Svg>
+      );
+    case 'sync':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Path d="M21.5 2V7H16.5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M2.5 22V17H7.5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M20.49 15A9 9 0 015.64 5.64L2.5 7" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <Path d="M3.51 9A9 9 0 0118.36 18.36L21.5 17" stroke={color} strokeWidth="2" strokeLinecap="round" />
+        </Svg>
+      );
+    case 'check':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Path d="M20 6L9 17L4 12" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'description':
+    case 'picture_as_pdf':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M14 2V8H20" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M16 13H8M16 17H8M10 9H8" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      );
+    case 'event':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Rect x="3" y="4" width="18" height="18" rx="2" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M16 2V6M8 2V6M3 10H21" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       );
     default:
