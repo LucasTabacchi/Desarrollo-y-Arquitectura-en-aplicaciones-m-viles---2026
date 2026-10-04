@@ -33,68 +33,28 @@ interface UnifiedHistoryItem {
   rawPayload?: any;
 }
 
-const DEFAULT_SAMPLE_HISTORY: UnifiedHistoryItem[] = [
-  {
-    id: 'sample-h-1',
-    type: 'snmp',
-    typeLabel: 'SNMP',
-    deviceName: 'ONT Huawei HG8245W5',
-    ip: '192.168.1.254',
-    siteName: 'Sitio Azotea Norte',
-    resultStatus: 'OK',
-    syncStatus: 'synced',
-    timeGroup: 'Hoy',
-    timeStr: 'Hoy 10:42',
-  },
-  {
-    id: 'sample-h-2',
-    type: 'ssh',
-    typeLabel: 'SSH',
-    deviceName: 'Router MikroTik hAP ac2',
-    ip: '192.168.1.1',
-    siteName: 'Sitio Azotea Norte',
-    resultStatus: 'Falla',
-    syncStatus: 'pending',
-    timeGroup: 'Hoy',
-    timeStr: 'Hoy 10:35',
-  },
-  {
-    id: 'sample-h-3',
-    type: 'installation',
-    typeLabel: 'Instalación',
-    deviceName: 'Router MikroTik hAP ac2',
-    ip: '192.168.1.1',
-    siteName: 'Sitio Azotea Norte',
-    resultStatus: 'OK',
-    syncStatus: 'pending',
-    timeGroup: 'Hoy',
-    timeStr: 'Hoy 10:20',
-  },
-  {
-    id: 'sample-h-4',
-    type: 'snmp',
-    typeLabel: 'SNMP',
-    deviceName: 'Antena Ubiquiti LiteBeam',
-    ip: '192.168.1.45',
-    siteName: 'Sitio Azotea Norte',
-    resultStatus: 'Alerta',
-    syncStatus: 'synced',
-    timeGroup: 'Ayer',
-    timeStr: 'Ayer 16:30',
-  },
-  {
-    id: 'sample-h-5',
-    type: 'ssh',
-    typeLabel: 'SSH',
-    deviceName: 'Switch Cisco SG250-8P',
-    ip: '192.168.1.10',
-    siteName: 'Sitio Azotea Norte',
-    resultStatus: 'OK',
-    syncStatus: 'synced',
-    timeGroup: 'Ayer',
-    timeStr: 'Ayer 15:10',
-  },
-];
+const getTimeGroup = (timestamp: number): 'Hoy' | 'Ayer' | 'Anteriores' => {
+  const itemDate = new Date(timestamp);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 86400000;
+
+  if (timestamp >= startOfToday) {
+    return 'Hoy';
+  }
+  if (timestamp >= startOfYesterday) {
+    return 'Ayer';
+  }
+  return 'Anteriores';
+};
+
+const formatTimeStr = (timestamp: number, group: 'Hoy' | 'Ayer' | 'Anteriores'): string => {
+  const date = new Date(timestamp);
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (group === 'Hoy') return `Hoy ${time}`;
+  if (group === 'Ayer') return `Ayer ${time}`;
+  return `${date.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${time}`;
+};
 
 export const HistoryScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -114,24 +74,23 @@ export const HistoryScreen: React.FC = () => {
       const mappedList: UnifiedHistoryItem[] = [];
 
       for (const diag of diagnostics) {
+        const group = getTimeGroup(diag.createdAt);
         mappedList.push({
           id: diag.id,
           type: diag.type as 'snmp' | 'ssh',
           typeLabel: diag.type === 'snmp' ? 'SNMP' : 'SSH',
           deviceName: diag.type === 'snmp' ? 'Diagnóstico SNMP' : 'Consola SSH',
           ip: diag.target,
-          siteName: 'Sitio Azotea Norte',
+          siteName: 'Sitio Local',
           resultStatus: diag.status === 'failed' ? 'Falla' : 'OK',
           syncStatus: diag.status === 'synced' ? 'synced' : 'pending',
-          timeGroup: 'Hoy',
-          timeStr: new Date(diag.createdAt).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
+          timeGroup: group,
+          timeStr: formatTimeStr(diag.createdAt, group),
         });
       }
 
       for (const inst of installations) {
+        const group = getTimeGroup(inst.createdAt);
         mappedList.push({
           id: inst.id,
           type: 'installation',
@@ -141,22 +100,15 @@ export const HistoryScreen: React.FC = () => {
           siteName: inst.siteName,
           resultStatus: 'OK',
           syncStatus: inst.status === 'synced' ? 'synced' : 'pending',
-          timeGroup: 'Hoy',
-          timeStr: new Date(inst.createdAt).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
+          timeGroup: group,
+          timeStr: formatTimeStr(inst.createdAt, group),
           rawPayload: inst,
         });
       }
 
-      if (mappedList.length > 0) {
-        setItems(mappedList);
-      } else {
-        setItems(DEFAULT_SAMPLE_HISTORY);
-      }
+      setItems(mappedList);
     } catch {
-      setItems(DEFAULT_SAMPLE_HISTORY);
+      setItems([]);
     }
   };
 
@@ -405,7 +357,9 @@ export const HistoryScreen: React.FC = () => {
             <Icon name="history" size={32} color={colors.outline} />
             <Text style={styles.emptyTitle}>Sin resultados en el historial</Text>
             <Text style={styles.emptySubtitle}>
-              No se encontraron registros para los filtros seleccionados.
+              {searchQuery.trim() || activeFilter !== 'all'
+                ? 'No se encontraron registros para los filtros seleccionados.'
+                : 'Realice diagnósticos o instalaciones para ver el registro histórico.'}
             </Text>
           </Card>
         )}

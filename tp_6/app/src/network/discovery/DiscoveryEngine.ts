@@ -68,6 +68,18 @@ export class DiscoveryEngine {
           if (existing && service.name) {
             existing.name = `${service.name} (mDNS)`;
             if (onDeviceFound) onDeviceFound(existing);
+          } else if (!existing && service.name) {
+            const mdnsDevice: DiscoveredDevice = {
+              ip,
+              name: `${service.name} (mDNS)`,
+              vendor: 'Dispositivo mDNS',
+              type: 'unknown',
+              isOnline: true,
+              responseTimeMs: 5,
+              openPorts: [service.port || 80],
+            };
+            discovered.push(mdnsDevice);
+            if (onDeviceFound) onDeviceFound(mdnsDevice);
           }
         }
       });
@@ -134,6 +146,9 @@ export class DiscoveryEngine {
       this.isScanning = false;
       try {
         this.zeroconf.stop();
+        if (typeof (this.zeroconf as any).removeAllListeners === 'function') {
+          (this.zeroconf as any).removeAllListeners();
+        }
       } catch (_) {}
     }
 
@@ -144,6 +159,9 @@ export class DiscoveryEngine {
     this.shouldCancel = true;
     try {
       this.zeroconf.stop();
+      if (typeof (this.zeroconf as any).removeAllListeners === 'function') {
+        (this.zeroconf as any).removeAllListeners();
+      }
     } catch (_) {}
   }
 
