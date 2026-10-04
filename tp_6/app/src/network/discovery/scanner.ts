@@ -13,7 +13,7 @@ export interface DiscoveredDevice {
   responseTimeMs: number;
 }
 
-export const STRATEGIC_PORTS = [80, 443, 8291, 22, 23, 8080];
+export const STRATEGIC_PORTS = [80, 443, 8291, 22, 23, 8080, 3000];
 
 /**
  * Probes a TCP port on a target host with a short timeout
@@ -131,7 +131,7 @@ export async function probeHost(
   }
 
   const responseTimeMs = Date.now() - startTime;
-  const vendor = detectVendor(sysDescr);
+  let vendor = detectVendor(sysDescr);
 
   // Classify device type based on open ports and vendor
   let type: DiscoveredDevice['type'] = 'unknown';
@@ -145,11 +145,21 @@ export async function probeHost(
     type = 'router';
   } else if (openPorts.includes(80) || openPorts.includes(443)) {
     type = 'switch';
+  } else if (openPorts.includes(3000)) {
+    type = 'router';
+  }
+
+  if (vendor === 'Genérico / Desconocido' && openPorts.includes(3000)) {
+    vendor = 'NetDiag Core';
   }
 
   const name =
     sysName ||
-    (vendor !== 'Genérico / Desconocido' ? `${vendor} (${host})` : `Equipo ${host}`);
+    (openPorts.includes(3000) && !sysName
+      ? `Nodo Central Sync (${host})`
+      : vendor !== 'Genérico / Desconocido'
+      ? `${vendor} (${host})`
+      : `Equipo ${host}`);
 
   return {
     ip: host,
