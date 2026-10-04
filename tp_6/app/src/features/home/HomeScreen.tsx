@@ -1,21 +1,108 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
 import { StatusHeader, Card, Icon, StatusBadge } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
+import { getRepositories } from '../../store';
+
+interface RecentActivityItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  timeStr: string;
+  desc: string;
+  status: 'synced' | 'pending' | 'failed' | 'conflict';
+  icon: 'router' | 'terminal' | 'install';
+  createdAt: number;
+  onPress: () => void;
+}
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const isFocused = useIsFocused();
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
+  const [recentActivities, setRecentActivities] = useState<RecentActivityItem[]>([]);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const formatRelativeTime = (timestamp: number): string => {
+    const diffMin = Math.floor((Date.now() - timestamp) / 60000);
+    if (diffMin < 1) return 'Ahora';
+    if (diffMin < 60) return `${diffMin} min`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours} h`;
+    return `${Math.floor(diffHours / 24)} d`;
+  };
+
+  const loadData = async () => {
+    try {
+      const repos = getRepositories();
+      const count = await repos.outbox.countPending();
+      setPendingSyncCount(count);
+
+      const [diags, insts] = await Promise.all([
+        repos.diagnostics.listAll(5),
+        repos.installations.listAll(),
+      ]);
+
+      const items: RecentActivityItem[] = [
+        ...diags.map((d) => ({
+          id: `diag-${d.id}`,
+          title: d.target,
+          subtitle: `IP: ${d.target}`,
+          timeStr: formatRelativeTime(d.createdAt),
+          desc: d.type === 'snmp' ? 'Diagnóstico SNMP completado' : 'Sesión SSH ejecutada',
+          status: d.status,
+          icon: (d.type === 'snmp' ? 'router' : 'terminal') as 'router' | 'terminal',
+          createdAt: d.createdAt,
+          onPress: () => navigation.navigate('DeviceDetail', { ip: d.target }),
+        })),
+        ...insts.slice(0, 5).map((inst) => ({
+          id: `inst-${inst.id}`,
+          title: inst.deviceName,
+          subtitle: `IP: ${inst.deviceIp}`,
+          timeStr: formatRelativeTime(inst.createdAt),
+          desc: 'Reporte de instalación generado',
+          status: inst.status,
+          icon: 'install' as const,
+          createdAt: inst.createdAt,
+          onPress: () =>
+            navigation.navigate('PdfPreview', {
+              filePath: inst.pdfPath || `reporte_${inst.id}.pdf`,
+              title: `Reporte de Instalación - ${inst.deviceName}`,
+            }),
+        })),
+      ]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 5);
+
+      setRecentActivities(items);
+    } catch (_) {
+      // Keep safe defaults if database uninitialized in test mocks
+    }
+  };
+
+  useEffect(() => {
+    if (isFocused) {
+      loadData();
+    }
+  }, [isFocused]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   return (
     <View style={styles.screen}>
@@ -28,6 +115,13 @@ export const HomeScreen: React.FC = () => {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* Header de la Suite */}
         <View style={styles.operatorSection}>
@@ -49,25 +143,46 @@ export const HomeScreen: React.FC = () => {
               <Text style={styles.syncCategory}>ALMACENAMIENTO LOCAL</Text>
               <Text style={styles.syncTitle}>Sincronización de Campo</Text>
             </View>
-            <View style={styles.syncCountBadge}>
-              <Text style={styles.syncCountText}>3</Text>
+            <View
+              style={[
+                styles.syncCountBadge,
+                pendingSyncCount === 0 && styles.syncCountBadgeSynced,
+              ]}
+            >
+              <Text style={styles.syncCountText}>{pendingSyncCount}</Text>
             </View>
           </View>
 
           {/* Buffer breakdown */}
           <View style={styles.bufferBreakdown}>
             <View style={styles.bufferLeft}>
-              <Icon name="pending_actions" size={18} color={colors.secondary} />
-              <Text style={styles.bufferText}>3 acciones pendientes</Text>
+              <Icon
+                name={pendingSyncCount > 0 ? 'pending_actions' : 'check_circle'}
+                size={18}
+                color={pendingSyncCount > 0 ? colors.secondary : colors.success}
+              />
+              <Text style={styles.bufferText}>
+                {pendingSyncCount === 1
+                  ? '1 acción pendiente'
+                  : pendingSyncCount > 1
+                  ? `${pendingSyncCount} acciones pendientes`
+                  : 'Todo sincronizado con el servidor'}
+              </Text>
             </View>
-            <Text style={styles.bufferDetails}>2 diag • 1 PDF</Text>
+            {pendingSyncCount > 0 && (
+              <Text style={styles.bufferDetails}>En cola local</Text>
+            )}
           </View>
 
           {/* Sync Card Footer */}
           <View style={styles.syncCardFooter}>
             <View style={styles.syncTimestampRow}>
               <Icon name="history" size={14} color={colors.onSurfaceVariant} />
-              <Text style={styles.syncTimestampText}>Hoy 10:42 con Nodo Central</Text>
+              <Text style={styles.syncTimestampText}>
+                {pendingSyncCount > 0
+                  ? 'Pendiente de sincronizar'
+                  : 'Base de datos local al día'}
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -155,110 +270,53 @@ export const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Activity Item 1 */}
-          <TouchableOpacity
-            style={styles.activityCard}
-            onPress={() =>
-              navigation.navigate('DeviceDetail', {
-                ip: '192.168.1.254',
-                mac: 'F4:C3:61:9A:82:10',
-                model: 'ONT Huawei HG8245W5',
-                hostname: 'ONT-AZOTEA-NORTE-01',
-              })
-            }
-            activeOpacity={0.7}
-          >
-            <View style={styles.activityTop}>
-              <View style={styles.activityDeviceCol}>
-                <View style={styles.activityIconBox}>
-                  <Icon name="router" size={18} color={colors.primary} />
+          {recentActivities.length > 0 ? (
+            recentActivities.map((act) => (
+              <TouchableOpacity
+                key={act.id}
+                style={styles.activityCard}
+                onPress={act.onPress}
+                activeOpacity={0.7}
+              >
+                <View style={styles.activityTop}>
+                  <View style={styles.activityDeviceCol}>
+                    <View style={styles.activityIconBox}>
+                      <Icon name={act.icon} size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.activityTextCol}>
+                      <Text style={styles.activityDeviceName}>{act.title}</Text>
+                      <Text style={styles.activityIp}>{act.subtitle}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.activityTime}>{act.timeStr}</Text>
                 </View>
-                <View style={styles.activityTextCol}>
-                  <Text style={styles.activityDeviceName}>ONT Huawei HG8245W5</Text>
-                  <Text style={styles.activityIp}>IP: 192.168.1.254</Text>
-                </View>
-              </View>
-              <Text style={styles.activityTime}>25 min</Text>
-            </View>
 
-            <View style={styles.activityBottom}>
-              <View style={styles.activityStatusRow}>
-                <Icon name="check_circle" size={15} color={colors.success} />
-                <Text style={styles.activityStatusDesc}>Diagnóstico SNMP completado</Text>
-              </View>
-              <StatusBadge label="Sincronizado" variant="success" dot />
-            </View>
-          </TouchableOpacity>
-
-          {/* Activity Item 2 */}
-          <TouchableOpacity
-            style={styles.activityCard}
-            onPress={() =>
-              navigation.navigate('DeviceDetail', {
-                ip: '192.168.1.1',
-                mac: 'B8:69:F4:11:C2:AA',
-                model: 'Router MikroTik hAP ac2',
-                hostname: 'admin@MikroTik',
-              })
-            }
-            activeOpacity={0.7}
-          >
-            <View style={styles.activityTop}>
-              <View style={styles.activityDeviceCol}>
-                <View style={styles.activityIconBox}>
-                  <Icon name="switch" size={18} color={colors.secondary} />
+                <View style={styles.activityBottom}>
+                  <View style={styles.activityStatusRow}>
+                    <Icon
+                      name={act.status === 'synced' ? 'check_circle' : 'pending_actions'}
+                      size={15}
+                      color={act.status === 'synced' ? colors.success : colors.warning}
+                    />
+                    <Text style={styles.activityStatusDesc}>{act.desc}</Text>
+                  </View>
+                  <StatusBadge
+                    label={act.status === 'synced' ? 'Sincronizado' : 'Pendiente'}
+                    variant={act.status === 'synced' ? 'success' : 'warning'}
+                    dot
+                  />
                 </View>
-                <View style={styles.activityTextCol}>
-                  <Text style={styles.activityDeviceName}>Router MikroTik hAP ac2</Text>
-                  <Text style={styles.activityIp}>IP: 192.168.1.1</Text>
-                </View>
-              </View>
-              <Text style={styles.activityTime}>1 h</Text>
-            </View>
-
-            <View style={styles.activityBottom}>
-              <View style={styles.activityStatusRow}>
-                <Icon name="terminal" size={15} color={colors.onSurfaceVariant} />
-                <Text style={styles.activityStatusDesc}>Comandos SSH ejecutados</Text>
-              </View>
-              <StatusBadge label="Pendiente" variant="warning" dot />
-            </View>
-          </TouchableOpacity>
-
-          {/* Activity Item 3 */}
-          <TouchableOpacity
-            style={styles.activityCard}
-            onPress={() =>
-              navigation.navigate('DeviceDetail', {
-                ip: '192.168.1.45',
-                mac: 'DC:9F:DB:44:19:EF',
-                model: 'Antena Ubiquiti LiteBeam',
-                hostname: 'LBE-5AC-Gen2',
-              })
-            }
-            activeOpacity={0.7}
-          >
-            <View style={styles.activityTop}>
-              <View style={styles.activityDeviceCol}>
-                <View style={styles.activityIconBox}>
-                  <Icon name="antenna" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.activityTextCol}>
-                  <Text style={styles.activityDeviceName}>Antena Ubiquiti LiteBeam</Text>
-                  <Text style={styles.activityIp}>IP: 192.168.1.45</Text>
-                </View>
-              </View>
-              <Text style={styles.activityTime}>2 h</Text>
-            </View>
-
-            <View style={styles.activityBottom}>
-              <View style={styles.activityStatusRow}>
-                <Icon name="pending_actions" size={15} color={colors.onSurfaceVariant} />
-                <Text style={styles.activityStatusDesc}>Reporte de instalación generado</Text>
-              </View>
-              <StatusBadge label="Pendiente" variant="warning" dot />
-            </View>
-          </TouchableOpacity>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <Card style={styles.emptyRecentCard} variant="surface">
+              <Icon name="history" size={28} color={colors.muted} />
+              <Text style={styles.emptyRecentTitle}>Sin actividad registrada</Text>
+              <Text style={styles.emptyRecentSub}>
+                Los diagnósticos SNMP, sesiones SSH e instalaciones realizadas aparecerán aquí.
+              </Text>
+            </Card>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -546,5 +604,30 @@ const styles = StyleSheet.create({
   activityStatusDesc: {
     ...typography.bodySm,
     color: colors.onSurfaceVariant,
+  },
+  emptyRecentCard: {
+    padding: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.surfaceStroke,
+  },
+  emptyRecentTitle: {
+    ...typography.bodyMedium,
+    color: colors.onSurface,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  emptyRecentSub: {
+    ...typography.bodySmall,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  syncCountBadgeSynced: {
+    backgroundColor: colors.success,
   },
 });
