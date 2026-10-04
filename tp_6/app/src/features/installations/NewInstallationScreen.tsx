@@ -21,7 +21,7 @@ import { PdfReportService } from '../../evidence/PdfReportService';
 import { getRepositories } from '../../store';
 import { Installation } from '../../store/models';
 
-interface PresetDevice {
+interface DetectedDevice {
   id: string;
   name: string;
   ip: string;
@@ -30,56 +30,6 @@ interface PresetDevice {
   opticalPower?: string;
 }
 
-const PRESET_DEVICES: PresetDevice[] = [
-  {
-    id: 'mikrotik',
-    name: 'Router MikroTik hAP ac2',
-    ip: '192.168.1.1',
-    mac: 'B8:69:F4:11:C2:AA',
-    serial: 'MKT-892401-AR',
-  },
-  {
-    id: 'huawei',
-    name: 'ONT Huawei HG8245W5',
-    ip: '192.168.1.254',
-    mac: 'F4:C3:61:9A:82:10',
-    serial: 'HW-ONT-45129',
-    opticalPower: '-19.4 dBm',
-  },
-  {
-    id: 'ubiquiti',
-    name: 'Antena Ubiquiti LiteBeam',
-    ip: '192.168.1.45',
-    mac: 'DC:9F:DB:44:19:EF',
-    serial: 'UB-LBE-5AC-77',
-  },
-  {
-    id: 'cisco',
-    name: 'Switch Cisco SG250-8P',
-    ip: '192.168.1.10',
-    mac: '00:26:98:A4:7B:33',
-    serial: 'CSCO-SG-9931',
-  },
-];
-
-const DEFAULT_PHOTOS = [
-  {
-    id: 'photo-1',
-    label: 'Frente rack',
-    uri: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400',
-  },
-  {
-    id: 'photo-2',
-    label: 'Roseta óptica',
-    uri: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=400',
-  },
-  {
-    id: 'photo-3',
-    label: 'Acometida',
-    uri: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400',
-  },
-];
-
 export const NewInstallationScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'NewInstallation'>>();
@@ -87,21 +37,22 @@ export const NewInstallationScreen: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(route.params?.step || 1);
 
   // Step 1: Equipment data
+  const [detectedDevices, setDetectedDevices] = useState<DetectedDevice[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string>(
-    route.params?.initialDeviceName ? 'custom' : 'mikrotik'
+    route.params?.initialDeviceName ? 'custom' : ''
   );
   const [deviceName, setDeviceName] = useState<string>(
-    route.params?.initialDeviceName || PRESET_DEVICES[0].name
+    route.params?.initialDeviceName || ''
   );
   const [deviceIp, setDeviceIp] = useState<string>(
-    route.params?.initialIp || PRESET_DEVICES[0].ip
+    route.params?.initialIp || ''
   );
   const [deviceMac, setDeviceMac] = useState<string>(
-    route.params?.initialMac || PRESET_DEVICES[0].mac
+    route.params?.initialMac || ''
   );
-  const [deviceSerial, setDeviceSerial] = useState<string>(PRESET_DEVICES[0].serial);
-  const [siteName, setSiteName] = useState<string>('Sitio Azotea Norte');
-  const [technicianName, setTechnicianName] = useState<string>('Carlos Méndez');
+  const [deviceSerial, setDeviceSerial] = useState<string>('');
+  const [siteName, setSiteName] = useState<string>('');
+  const [technicianName, setTechnicianName] = useState<string>('');
 
   // Step 2: Evidence data - Starts empty for real field capture
   const [photos, setPhotos] = useState<
@@ -124,9 +75,7 @@ export const NewInstallationScreen: React.FC = () => {
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
 
   // Step 3: Technical Notes
-  const [notes, setNotes] = useState<string>(
-    'Equipo instalado en rack 2. Enlace de fibra verificado. Se reemplazó el router anterior.'
-  );
+  const [notes, setNotes] = useState<string>('');
 
   // Step 4: Submission state
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -145,23 +94,29 @@ export const NewInstallationScreen: React.FC = () => {
     }
   }, [route.params]);
 
-  // Load real discovered devices from SQLite repository if available
+  // Load real discovered devices from SQLite repository
   useEffect(() => {
     (async () => {
       try {
         const repos = getRepositories();
         const stored = await repos.devices.listAll();
-        if (stored.length > 0 && !route.params?.initialDeviceName) {
-          const first = stored[0];
-          setSelectedPresetId(`stored_${first.id}`);
-          setDeviceName(first.hostname || first.model || `Equipo ${first.ip}`);
-          setDeviceIp(first.ip);
-          if (first.mac) setDeviceMac(first.mac);
-          if (first.serialNumber) setDeviceSerial(first.serialNumber);
+        if (stored.length > 0) {
+          const mapped: DetectedDevice[] = stored.map((d) => ({
+            id: d.id,
+            name: d.hostname || d.model || `Equipo ${d.ip}`,
+            ip: d.ip,
+            mac: d.mac || '',
+            serial: d.serialNumber || '',
+          }));
+          setDetectedDevices(mapped);
+        } else {
+          setDetectedDevices([]);
         }
-      } catch (_) {}
+      } catch (_) {
+        setDetectedDevices([]);
+      }
     })();
-  }, [route.params]);
+  }, []);
 
   // Fetch GPS on mounting or when entering step 2
   useEffect(() => {
@@ -182,12 +137,12 @@ export const NewInstallationScreen: React.FC = () => {
     }
   };
 
-  const handleSelectPreset = (preset: PresetDevice) => {
-    setSelectedPresetId(preset.id);
-    setDeviceName(preset.name);
-    setDeviceIp(preset.ip);
-    setDeviceMac(preset.mac);
-    setDeviceSerial(preset.serial);
+  const handleSelectPreset = (dev: DetectedDevice) => {
+    setSelectedPresetId(dev.id);
+    setDeviceName(dev.name);
+    setDeviceIp(dev.ip);
+    setDeviceMac(dev.mac);
+    setDeviceSerial(dev.serial);
   };
 
   const handleAddPhoto = async () => {
@@ -250,12 +205,12 @@ export const NewInstallationScreen: React.FC = () => {
     });
 
     try {
-      const selectedPreset = PRESET_DEVICES.find((p) => p.id === selectedPresetId);
+      const selectedDevice = detectedDevices.find((p) => p.id === selectedPresetId);
 
       // 1. Generate PDF
       const pdfPath = await PdfReportService.generateReport({
         reportId: `INST-${Date.now().toString().slice(-4)}`,
-        siteName,
+        siteName: siteName.trim() || 'Sitio sin especificar',
         technicianName: technicianName.trim() || 'Técnico de Campo',
         date: dateFormatted,
         equipment: {
@@ -263,7 +218,7 @@ export const NewInstallationScreen: React.FC = () => {
           ip: deviceIp,
           mac: deviceMac,
           serialNumber: deviceSerial,
-          opticalPower: selectedPreset?.opticalPower,
+          opticalPower: selectedDevice?.opticalPower,
         },
         gps: {
           latitude: gpsCoords.latitude,
@@ -285,7 +240,7 @@ export const NewInstallationScreen: React.FC = () => {
         deviceName,
         deviceIp,
         deviceMac,
-        siteName,
+        siteName: siteName.trim() || 'Sitio sin especificar',
         gpsLat: gpsCoords.latitude,
         gpsLng: gpsCoords.longitude,
         gpsAccuracy: gpsCoords.accuracy,
@@ -417,47 +372,59 @@ export const NewInstallationScreen: React.FC = () => {
             />
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>EQUIPOS DETECTADOS</Text>
+              <Text style={styles.sectionTitle}>EQUIPOS DETECTADOS EN RED</Text>
             </View>
 
-            <View style={styles.deviceList}>
-              {PRESET_DEVICES.map((dev) => {
-                const isSelected = selectedPresetId === dev.id;
-                return (
-                  <TouchableOpacity
-                    key={dev.id}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.deviceRadioCard,
-                      isSelected && styles.deviceRadioCardSelected,
-                    ]}
-                    onPress={() => handleSelectPreset(dev)}
-                  >
-                    <View style={styles.radioRow}>
-                      <View
-                        style={[
-                          styles.radioCircle,
-                          isSelected && styles.radioCircleSelected,
-                        ]}
-                      >
-                        {isSelected && <Icon name="check" size={14} color="#001C39" />}
+            {detectedDevices.length > 0 ? (
+              <View style={styles.deviceList}>
+                {detectedDevices.map((dev) => {
+                  const isSelected = selectedPresetId === dev.id;
+                  return (
+                    <TouchableOpacity
+                      key={dev.id}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.deviceRadioCard,
+                        isSelected && styles.deviceRadioCardSelected,
+                      ]}
+                      onPress={() => handleSelectPreset(dev)}
+                    >
+                      <View style={styles.radioRow}>
+                        <View
+                          style={[
+                            styles.radioCircle,
+                            isSelected && styles.radioCircleSelected,
+                          ]}
+                        >
+                          {isSelected && <Icon name="check" size={14} color="#001C39" />}
+                        </View>
+                        <View style={styles.deviceDetails}>
+                          <Text style={styles.deviceItemName}>{dev.name}</Text>
+                          <Text style={styles.deviceItemSub}>
+                            {dev.ip}{dev.mac ? ` · ${dev.mac}` : ''}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.deviceDetails}>
-                        <Text style={styles.deviceItemName}>{dev.name}</Text>
-                        <Text style={styles.deviceItemSub}>
-                          {dev.ip} · {dev.mac}
-                        </Text>
-                      </View>
-                    </View>
-                    {isSelected && <View style={styles.activeLed} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                      {isSelected && <View style={styles.activeLed} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : (
+              <Card style={styles.noDevicesCard} variant="surface">
+                <View style={styles.noDevicesRow}>
+                  <Icon name="radar" size={20} color={colors.primary} />
+                  <Text style={styles.noDevicesText}>
+                    No hay equipos escaneados previamente en la red local. Podés escanear un código QR o ingresar los datos manualmente debajo.
+                  </Text>
+                </View>
+              </Card>
+            )}
 
             {/* Manual Edit Card */}
             <Card style={styles.manualCard} variant="surface">
               <Text style={styles.manualTitle}>Datos de Instalación</Text>
+              
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Sitio / Ubicación</Text>
                 <TextInput
@@ -517,6 +484,18 @@ export const NewInstallationScreen: React.FC = () => {
                     autoCapitalize="characters"
                   />
                 </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Número de Serie</Text>
+                <TextInput
+                  style={[styles.textInput, styles.fontMono]}
+                  value={deviceSerial}
+                  onChangeText={setDeviceSerial}
+                  placeholder="Ej. MKT-892401-AR"
+                  placeholderTextColor={colors.muted}
+                  autoCapitalize="characters"
+                />
               </View>
             </Card>
 
@@ -902,29 +881,53 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   manualCard: {
-    gap: spacing.sm,
+    gap: spacing.md,
     padding: spacing.md,
   },
   manualTitle: {
     ...typography.bodyMedium,
     color: colors.onSurface,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  noDevicesCard: {
+    padding: spacing.md,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.surfaceStroke,
+  },
+  noDevicesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  noDevicesText: {
+    flex: 1,
+    ...typography.bodySmall,
+    color: colors.onSurfaceVariant,
+    lineHeight: 18,
   },
   inputGroup: {
-    gap: 4,
+    gap: 6,
   },
   inputLabel: {
     ...typography.labelSmall,
     color: colors.onSurfaceVariant,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   textInput: {
-    backgroundColor: colors.surfaceContainer,
+    backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 8,
-    paddingHorizontal: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceStroke,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+    minHeight: 48,
     color: colors.onSurface,
-    fontSize: 13,
+    fontSize: 14,
   },
   fontMono: {
     fontFamily: 'monospace',
@@ -1089,10 +1092,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   notesCard: {
-    padding: spacing.md,
+    padding: spacing.xs,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.surfaceStroke,
   },
   notesInput: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceStroke,
+    padding: 14,
     color: colors.onSurface,
     ...typography.bodyMedium,
     lineHeight: 22,
