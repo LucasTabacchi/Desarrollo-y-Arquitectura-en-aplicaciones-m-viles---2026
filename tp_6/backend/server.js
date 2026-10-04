@@ -202,6 +202,7 @@ app.get('/sync/pull', (req, res) => {
 });
 
 const { startSnmpServer } = require('./snmpServer');
+const { startSshServer } = require('./sshServer');
 
 app.listen(PORT, () => {
   console.log(`[NetDiag Backend] Sync stub server running on port ${PORT}`);
@@ -209,5 +210,10 @@ app.listen(PORT, () => {
     startSnmpServer(161);
   } catch (err) {
     console.warn('[NetDiag Backend] Could not start SNMP server:', err.message);
+  }
+  try {
+    startSshServer(22);
+  } catch (err) {
+    console.warn('[NetDiag Backend] Could not start SSH server:', err.message);
   }
 });
