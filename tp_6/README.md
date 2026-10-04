@@ -169,5 +169,5 @@ adb install app/android/app/build/outputs/apk/debug/app-debug.apk
 
 ## 6. Documentos de Referencia
 
-- 📘 [Reporte Técnico de Arquitectura (`docs/TECHNICAL_REPORT.md`)](file:///c:/Users/lucas/Desktop/dam-2026/tp_6/docs/TECHNICAL_REPORT.md) — Análisis detallado de diseño de capas, matemática de subredes, protocolo SNMP, seguridad y sincronización.
-- 🎬 [Guía de Demostración y Video Script (`docs/DEMO_SCRIPT.md`)](file:///c:/Users/lucas/Desktop/dam-2026/tp_6/docs/DEMO_SCRIPT.md) — Guion estructurado paso a paso para la evaluación y grabación de la demo técnica.
+- 📘 [Reporte Técnico de Arquitectura (`docs/TECHNICAL_REPORT.md`)](tp_6/docs/TECHNICAL_REPORT.md) — Análisis detallado de diseño de capas, matemática de subredes, protocolo SNMP, seguridad y sincronización.
+- 🎬 [Guía de Demostración y Video Script (`docs/DEMO_SCRIPT.md`)](tp_6/docs/DEMO_SCRIPT.md) — Guion estructurado paso a paso para la evaluación y grabación de la demo técnica.
