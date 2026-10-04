@@ -20,60 +20,12 @@ import { getRepositories } from '../../store';
 import { OutboxItem } from '../../store/models';
 import { SyncWorker } from '../../sync/SyncWorker';
 
-interface DisplayQueueItem {
-  id: string;
-  title: string;
-  device: string;
-  subinfo: string;
-  timeStr: string;
-  status: 'pending' | 'retry' | 'error' | 'synced' | 'conflict';
-  attempts?: number;
-}
-
-const SAMPLE_QUEUE: DisplayQueueItem[] = [
-  {
-    id: 'sample-q-1',
-    title: 'Reporte de instalación',
-    device: 'Router MikroTik hAP ac2',
-    subinfo: 'Sitio Azotea Norte',
-    timeStr: 'Hoy 10:42',
-    status: 'pending',
-    attempts: 0,
-  },
-  {
-    id: 'sample-q-2',
-    title: 'Diagnóstico SNMP',
-    device: 'ONT Huawei HG8245W5',
-    subinfo: '192.168.1.254',
-    timeStr: 'Hoy 10:35',
-    status: 'retry',
-    attempts: 2,
-  },
-  {
-    id: 'sample-q-3',
-    title: 'Diagnóstico SSH',
-    device: 'Router MikroTik hAP ac2',
-    subinfo: '192.168.1.1:22',
-    timeStr: 'Hoy 10:15',
-    status: 'error',
-    attempts: 3,
-  },
-  {
-    id: 'sample-q-4',
-    title: 'Diagnóstico SNMP',
-    device: 'Antena Ubiquiti LiteBeam',
-    subinfo: '192.168.1.45',
-    timeStr: 'Hoy 09:50',
-    status: 'synced',
-    attempts: 1,
-  },
-];
-
 export const SyncQueueScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isFocused = useIsFocused();
 
   const [dbItems, setDbItems] = useState<OutboxItem[]>([]);
+  const [pendingCount, setPendingCount] = useState<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -81,10 +33,13 @@ export const SyncQueueScreen: React.FC = () => {
   const loadData = async () => {
     try {
       const repos = getRepositories();
-      const items = await repos.outbox.peekPending(Date.now() + 86400000, 50);
+      const items = await repos.outbox.listAll(50);
       setDbItems(items);
+      const count = await repos.outbox.countPending();
+      setPendingCount(count);
     } catch {
       setDbItems([]);
+      setPendingCount(0);
     }
 
     try {
@@ -131,9 +86,6 @@ export const SyncQueueScreen: React.FC = () => {
     }
   };
 
-  // Map dbItems or sampleItems
-  const pendingCount = dbItems.length > 0 ? dbItems.length : 3;
-
   return (
     <View style={styles.screen}>
       <StatusHeader
@@ -141,6 +93,7 @@ export const SyncQueueScreen: React.FC = () => {
         showBack
         onPressBack={() => navigation.goBack()}
         isOnline={isOnline}
+        pendingCount={pendingCount}
       />
 
       <ScrollView
@@ -168,131 +121,111 @@ export const SyncQueueScreen: React.FC = () => {
         {/* Summary text */}
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>
-            {pendingCount} {pendingCount === 1 ? 'acción pendiente' : 'acciones pendientes'}
+            {pendingCount === 0
+              ? 'Sin acciones pendientes'
+              : `${pendingCount} ${
+                  pendingCount === 1 ? 'acción pendiente' : 'acciones pendientes'
+                }`}
           </Text>
         </View>
 
         {/* Database Items (if any) */}
-        {dbItems.map((item) => {
-          let title = 'Registro';
-          if (item.entityType === 'installation') title = 'Reporte de instalación';
-          if (item.entityType === 'diagnostic') title = 'Diagnóstico SNMP / SSH';
+        {dbItems.length > 0 ? (
+          dbItems.map((item) => {
+            let title = 'Registro';
+            if (item.entityType === 'installation') title = 'Reporte de instalación';
+            if (item.entityType === 'diagnostic') title = 'Diagnóstico SNMP / SSH';
 
-          let payloadObj: any = {};
-          try {
-            payloadObj = JSON.parse(item.payloadJson);
-          } catch {}
+            let payloadObj: any = {};
+            try {
+              payloadObj = JSON.parse(item.payloadJson);
+            } catch {}
 
-          const deviceName = payloadObj.deviceName || `ID: ${item.entityId}`;
-          const isConflict = item.status === 'conflict';
-          const isError = item.attempts >= 3;
+            const deviceName =
+              payloadObj.deviceName ||
+              payloadObj.model ||
+              payloadObj.target ||
+              `ID: ${item.entityId}`;
+            const subinfo =
+              payloadObj.siteName ||
+              payloadObj.target ||
+              `Entidad: ${item.entityType}`;
+            const isConflict = item.status === 'conflict';
+            const isSynced = item.status === 'synced';
+            const isError = item.attempts >= 3;
 
-          return (
-            <Card key={item.id} style={styles.itemCard} variant="surface">
-              <View style={styles.itemHeader}>
-                <Text style={styles.itemTitle}>{title}</Text>
-                {isConflict ? (
+            return (
+              <Card key={item.id} style={styles.itemCard} variant="surface">
+                <View style={styles.itemHeader}>
+                  <Text style={styles.itemTitle}>{title}</Text>
+                  {isConflict ? (
+                    <TouchableOpacity
+                      onPress={() =>
+                        navigation.navigate('SyncConflict', { conflictId: item.id })
+                      }
+                    >
+                      <StatusBadge label="Conflicto" variant="warning" dot />
+                    </TouchableOpacity>
+                  ) : isSynced ? (
+                    <StatusBadge label="Sincronizado" variant="success" dot />
+                  ) : isError ? (
+                    <StatusBadge label="Error" variant="critical" dot />
+                  ) : item.attempts > 0 ? (
+                    <StatusBadge
+                      label={`Reintentando (${item.attempts})`}
+                      variant="warning"
+                      dot
+                    />
+                  ) : (
+                    <StatusBadge label="Pendiente" variant="neutral" dot />
+                  )}
+                </View>
+
+                <Text style={styles.itemDevice}>{deviceName}</Text>
+                <Text style={styles.itemMeta}>{subinfo}</Text>
+                <Text style={[styles.itemMeta, { marginTop: 2 }]}>
+                  {new Date(item.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+
+                {isConflict && (
                   <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.conflictBtn}
                     onPress={() =>
                       navigation.navigate('SyncConflict', { conflictId: item.id })
                     }
                   >
-                    <StatusBadge label="Conflicto" variant="warning" dot />
-                  </TouchableOpacity>
-                ) : isError ? (
-                  <StatusBadge label="Error" variant="critical" dot />
-                ) : item.attempts > 0 ? (
-                  <StatusBadge
-                    label={`Reintentando (${item.attempts})`}
-                    variant="warning"
-                    dot
-                  />
-                ) : (
-                  <StatusBadge label="Pendiente" variant="neutral" dot />
-                )}
-              </View>
-
-              <Text style={styles.itemDevice}>{deviceName}</Text>
-              <Text style={styles.itemMeta}>Entidad: {item.entityType}</Text>
-
-              {isConflict && (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.conflictBtn}
-                  onPress={() =>
-                    navigation.navigate('SyncConflict', { conflictId: item.id })
-                  }
-                >
-                  <Icon name="warning" size={16} color="#F5A524" />
-                  <Text style={styles.conflictBtnText}>Resolver conflicto de versión</Text>
-                </TouchableOpacity>
-              )}
-
-              {isError && (
-                <View style={styles.retryRow}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.retryBtn}
-                    onPress={() => handleRetryItem(item.id)}
-                  >
-                    <Text style={styles.retryBtnText}>Reintentar</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </Card>
-          );
-        })}
-
-        {/* Default Sample Items when db is empty */}
-        {dbItems.length === 0 &&
-          SAMPLE_QUEUE.map((item) => (
-            <Card key={item.id} style={styles.itemCard} variant="surface">
-              <View style={styles.itemHeader}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                {item.status === 'pending' && (
-                  <StatusBadge label="Pendiente" variant="neutral" dot />
-                )}
-                {item.status === 'retry' && (
-                  <StatusBadge
-                    label={`Reintentando (${item.attempts})`}
-                    variant="warning"
-                    dot
-                  />
-                )}
-                {item.status === 'error' && (
-                  <StatusBadge label="Error" variant="critical" dot />
-                )}
-                {item.status === 'synced' && (
-                  <StatusBadge label="Sincronizado" variant="success" dot />
-                )}
-                {item.status === 'conflict' && (
-                  <TouchableOpacity
-                    onPress={() =>
-                      navigation.navigate('SyncConflict', { conflictId: item.id })
-                    }
-                  >
-                    <StatusBadge label="Conflicto" variant="warning" dot />
+                    <Icon name="warning" size={16} color="#F5A524" />
+                    <Text style={styles.conflictBtnText}>Resolver conflicto de versión</Text>
                   </TouchableOpacity>
                 )}
-              </View>
 
-              <Text style={styles.itemDevice}>{item.device}</Text>
-              <Text style={styles.itemMeta}>{item.subinfo}</Text>
-              <Text style={[styles.itemMeta, { marginTop: 2 }]}>{item.timeStr}</Text>
-
-              {item.status === 'error' && (
-                <View style={styles.retryRow}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.retryBtn}
-                    onPress={handleManualSync}
-                  >
-                    <Text style={styles.retryBtnText}>Reintentar</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </Card>
-          ))}
+                {isError && (
+                  <View style={styles.retryRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.retryBtn}
+                      onPress={() => handleRetryItem(item.id)}
+                    >
+                      <Text style={styles.retryBtnText}>Reintentar</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </Card>
+            );
+          })
+        ) : (
+          <Card style={styles.emptyCard} variant="surface">
+            <Icon name="check_circle" size={36} color={colors.success} />
+            <Text style={styles.emptyTitle}>Cola de sincronización al día</Text>
+            <Text style={styles.emptySubtitle}>
+              No hay acciones pendientes en la base de datos local SQLite. Todas las instalaciones y diagnósticos han sido sincronizados con el nodo central.
+            </Text>
+          </Card>
+        )}
 
         {/* Prominent Primary Button */}
         <View style={styles.bottomSection}>
@@ -406,5 +339,28 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     marginTop: spacing.lg,
+  },
+  emptyCard: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.surfaceStroke,
+    marginTop: spacing.sm,
+  },
+  emptyTitle: {
+    ...typography.headlineSm,
+    color: colors.onSurface,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  emptySubtitle: {
+    ...typography.bodySm,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

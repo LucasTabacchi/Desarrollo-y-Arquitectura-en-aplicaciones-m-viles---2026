@@ -6,6 +6,8 @@ import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import { Icon } from './Icon';
 
+import { getRepositories } from '../../store';
+
 interface StatusHeaderProps {
   title: string;
   subtitle?: string;
@@ -20,12 +22,34 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
   title,
   subtitle = 'NETWORK DIAGNOSTICS SUITE',
   isOnline = true,
-  pendingCount = 3,
+  pendingCount: propPendingCount,
   onPressSyncQueue,
   onPressBack,
   showBack = false,
 }) => {
   const insets = useSafeAreaInsets();
+  const [autoPending, setAutoPending] = React.useState<number>(0);
+
+  React.useEffect(() => {
+    if (propPendingCount !== undefined) return;
+    let mounted = true;
+    const fetchCount = async () => {
+      try {
+        const repos = getRepositories();
+        const count = await repos.outbox.countPending();
+        if (mounted) setAutoPending(count);
+      } catch {
+        if (mounted) setAutoPending(0);
+      }
+    };
+    fetchCount();
+    return () => {
+      mounted = false;
+    };
+  }, [propPendingCount]);
+
+  const effectivePending =
+    propPendingCount !== undefined ? propPendingCount : autoPending;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -70,11 +94,18 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
             style={styles.syncPill}
             onPress={onPressSyncQueue}
             activeOpacity={0.7}
-            accessibilityLabel={`Cola de sincronización, ${pendingCount} pendientes`}
+            accessibilityLabel={`Cola de sincronización, ${effectivePending} pendientes`}
           >
             <Icon name="cloud_sync" size={16} color={colors.onSurfaceVariant} />
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingBadgeText}>{pendingCount} pend.</Text>
+            <View
+              style={[
+                styles.pendingBadge,
+                effectivePending === 0 && styles.pendingBadgeSynced,
+              ]}
+            >
+              <Text style={styles.pendingBadgeText}>
+                {effectivePending > 0 ? `${effectivePending} pend.` : 'Al día'}
+              </Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -195,6 +226,9 @@ const styles = StyleSheet.create({
     borderRadius: spacing.radius.full,
     paddingHorizontal: 5,
     paddingVertical: 1,
+  },
+  pendingBadgeSynced: {
+    backgroundColor: colors.success,
   },
   pendingBadgeText: {
     ...typography.labelSm,
