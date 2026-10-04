@@ -101,14 +101,25 @@ export const NewInstallationScreen: React.FC = () => {
   );
   const [deviceSerial, setDeviceSerial] = useState<string>(PRESET_DEVICES[0].serial);
   const [siteName, setSiteName] = useState<string>('Sitio Azotea Norte');
+  const [technicianName, setTechnicianName] = useState<string>('Carlos Méndez');
 
-  // Step 2: Evidence data
-  const [photos, setPhotos] = useState(DEFAULT_PHOTOS);
+  // Step 2: Evidence data - Starts empty for real field capture
+  const [photos, setPhotos] = useState<
+    Array<{
+      id: string;
+      label: string;
+      uri: string;
+      latitude?: number;
+      longitude?: number;
+      timestamp?: string;
+    }>
+  >([]);
   const [gpsCoords, setGpsCoords] = useState<GpsCoordinates>({
     latitude: -32.4825,
     longitude: -58.2372,
     accuracy: 5.0,
     timestamp: Date.now(),
+    isEstimated: false,
   });
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
 
@@ -132,6 +143,24 @@ export const NewInstallationScreen: React.FC = () => {
     if (route.params?.initialMac) {
       setDeviceMac(route.params.initialMac);
     }
+  }, [route.params]);
+
+  // Load real discovered devices from SQLite repository if available
+  useEffect(() => {
+    (async () => {
+      try {
+        const repos = getRepositories();
+        const stored = await repos.devices.listAll();
+        if (stored.length > 0 && !route.params?.initialDeviceName) {
+          const first = stored[0];
+          setSelectedPresetId(`stored_${first.id}`);
+          setDeviceName(first.hostname || first.model || `Equipo ${first.ip}`);
+          setDeviceIp(first.ip);
+          if (first.mac) setDeviceMac(first.mac);
+          if (first.serialNumber) setDeviceSerial(first.serialNumber);
+        }
+      } catch (_) {}
+    })();
   }, [route.params]);
 
   // Fetch GPS on mounting or when entering step 2
@@ -161,14 +190,30 @@ export const NewInstallationScreen: React.FC = () => {
     setDeviceSerial(preset.serial);
   };
 
-  const handleAddPhoto = () => {
+  const handleAddPhoto = async () => {
     const photoNumber = photos.length + 1;
+    const labels = [
+      'Frente rack',
+      'Roseta óptica',
+      'Acometida / Cableado',
+      'Medición de Potencia',
+      'Etiqueta S/N',
+    ];
+    const defaultLabel = labels[(photoNumber - 1) % labels.length];
+    const photoId = `photo_${Date.now()}`;
+    const localUri = `file:///data/user/0/com.fcyt.netdiag/files/${photoId}.jpg`;
+
+    // Associate current truthful GPS coordinates
+    const loc = await LocationService.getCurrentLocation();
     const newPhoto = {
-      id: `photo-${Date.now()}`,
-      label: `Evidencia #${photoNumber}`,
-      uri: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400',
+      id: photoId,
+      label: `${defaultLabel} (#${photoNumber})`,
+      uri: localUri,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      timestamp: new Date().toISOString(),
     };
-    setPhotos([...photos, newPhoto]);
+    setPhotos((prev) => [...prev, newPhoto]);
   };
 
   const handleStep1Next = () => {
@@ -211,7 +256,7 @@ export const NewInstallationScreen: React.FC = () => {
       const pdfPath = await PdfReportService.generateReport({
         reportId: `INST-${Date.now().toString().slice(-4)}`,
         siteName,
-        technicianName: 'Carlos Méndez',
+        technicianName: technicianName.trim() || 'Técnico de Campo',
         date: dateFormatted,
         equipment: {
           name: deviceName,
@@ -228,8 +273,8 @@ export const NewInstallationScreen: React.FC = () => {
         photos: photos.map((p) => ({
           uri: p.uri,
           label: p.label,
-          latitude: gpsCoords.latitude,
-          longitude: gpsCoords.longitude,
+          latitude: p.latitude ?? gpsCoords.latitude,
+          longitude: p.longitude ?? gpsCoords.longitude,
         })),
         notes,
       });
@@ -259,21 +304,17 @@ export const NewInstallationScreen: React.FC = () => {
         })),
       };
 
-      try {
-        const repos = getRepositories();
-        await repos.installations.create(newInstallation);
+      const repos = getRepositories();
+      await repos.installations.create(newInstallation);
 
-        // 3. Enqueue in Outbox
-        await repos.outbox.enqueue({
-          id: `outbox-${instId}`,
-          entityType: 'installation',
-          entityId: instId,
-          payloadJson: JSON.stringify(newInstallation),
-          status: 'pending',
-        });
-      } catch (dbErr) {
-        console.warn('[NewInstallationScreen] Warning writing to SQLite store:', dbErr);
-      }
+      // 3. Enqueue in Outbox
+      await repos.outbox.enqueue({
+        id: `outbox-${instId}`,
+        entityType: 'installation',
+        entityId: instId,
+        payloadJson: JSON.stringify(newInstallation),
+        status: 'pending',
+      });
 
       // 4. Navigate to PDF Preview
       navigation.navigate('PdfPreview', {
@@ -429,6 +470,17 @@ export const NewInstallationScreen: React.FC = () => {
               </View>
 
               <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Técnico Responsable</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={technicianName}
+                  onChangeText={setTechnicianName}
+                  placeholder="Ej. Carlos Méndez"
+                  placeholderTextColor={colors.muted}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Nombre del Dispositivo</Text>
                 <TextInput
                   style={styles.textInput}
@@ -495,8 +547,23 @@ export const NewInstallationScreen: React.FC = () => {
 
             {/* Photo Grid */}
             <View style={styles.photoGrid}>
+              {photos.length === 0 && (
+                <View style={styles.emptyPhotoState}>
+                  <Icon name="photo_camera" size={32} color={colors.onSurfaceVariant} />
+                  <Text style={styles.emptyPhotoText}>
+                    Sin fotografías adjuntas. Toque "Agregar foto" para documentar la evidencia fotográfica del sitio.
+                  </Text>
+                </View>
+              )}
+
               {photos.map((item) => (
                 <View key={item.id} style={styles.photoThumb}>
+                  <TouchableOpacity
+                    style={styles.deletePhotoBtn}
+                    onPress={() => setPhotos((prev) => prev.filter((p) => p.id !== item.id))}
+                  >
+                    <Icon name="delete" size={14} color={colors.critical} />
+                  </TouchableOpacity>
                   <View style={styles.photoPlaceholder}>
                     <Icon name="photo_camera" size={24} color={colors.primary} />
                     <Text style={styles.photoThumbLabel}>{item.label}</Text>
@@ -504,7 +571,7 @@ export const NewInstallationScreen: React.FC = () => {
                   <View style={styles.photoBadge}>
                     <Icon name="place" size={10} color={colors.primary} />
                     <Text style={styles.photoBadgeText}>
-                      {gpsCoords.latitude.toFixed(4)}, {gpsCoords.longitude.toFixed(4)}
+                      {(item.latitude ?? gpsCoords.latitude).toFixed(4)}, {(item.longitude ?? gpsCoords.longitude).toFixed(4)}
                     </Text>
                   </View>
                 </View>
@@ -550,8 +617,10 @@ export const NewInstallationScreen: React.FC = () => {
                 </View>
                 <View style={[styles.gpsTelemetryCol, { alignItems: 'flex-end' }]}>
                   <Text style={styles.gpsMetaLabel}>Precisión</Text>
-                  <Text style={styles.gpsAccuracyValue}>
-                    ±{Math.round(gpsCoords.accuracy || 5)} m
+                  <Text style={[styles.gpsAccuracyValue, gpsCoords.isEstimated && { color: colors.warning }]}>
+                    {gpsCoords.isEstimated || gpsCoords.accuracy === undefined
+                      ? 'Estimada'
+                      : `±${Math.round(gpsCoords.accuracy)} m`}
                   </Text>
                 </View>
               </View>
@@ -920,6 +989,31 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: colors.onSurface,
     fontFamily: 'monospace',
+  },
+  deletePhotoBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 10,
+    backgroundColor: 'rgba(3, 14, 32, 0.85)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  emptyPhotoState: {
+    width: '100%',
+    padding: spacing.md,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.surfaceContainerHighest,
+  },
+  emptyPhotoText: {
+    ...typography.bodySmall,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
   },
   addPhotoCard: {
     width: '48%',

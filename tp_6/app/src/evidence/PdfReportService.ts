@@ -36,21 +36,26 @@ export class PdfReportService {
    * Matches the official white-sheet layout from the field diagnostics design specification.
    */
   public static generateHtml(data: InstallationReportData): string {
-    const accuracyBadge = data.gps.accuracy ? ` (±${Math.round(data.gps.accuracy)} m)` : '';
+    const accuracyBadge = data.gps.accuracy ? ` (±${Math.round(data.gps.accuracy)} m)` : ' (Estimada de referencia)';
     const coordsStr = `${data.gps.latitude.toFixed(4)}, ${data.gps.longitude.toFixed(4)}`;
 
     const photosHtml = data.photos && data.photos.length > 0
       ? data.photos
           .map(
-            (p) => `
+            (p) => {
+              const photoCoords = (p.latitude !== undefined && p.longitude !== undefined)
+                ? `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`
+                : coordsStr;
+              return `
           <div style="flex: 1; min-width: 140px; margin: 4px; background: #E2E8F0; border-radius: 8px; overflow: hidden; position: relative;">
             <img src="${p.uri}" alt="${p.label}" style="width: 100%; height: 110px; object-fit: cover; display: block;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
             <div style="display: none; height: 110px; background: #16263D; color: #A4C9FF; align-items: center; justify-content: center; font-size: 11px; font-family: monospace;">[${p.label}]</div>
             <div style="position: absolute; bottom: 4px; left: 4px; right: 4px; background: rgba(15, 23, 42, 0.85); color: #FFFFFF; font-size: 9px; font-family: monospace; text-align: center; border-radius: 4px; padding: 2px;">
-              ${p.label} · ${coordsStr}
+              ${p.label} · ${photoCoords}
             </div>
           </div>
-        `
+        `;
+            }
           )
           .join('')
       : '<p style="font-size: 12px; color: #64748B; font-style: italic;">Sin fotografías adjuntas</p>';

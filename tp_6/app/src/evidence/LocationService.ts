@@ -5,11 +5,12 @@ export interface GpsCoordinates {
   longitude: number;
   accuracy?: number;
   timestamp: number;
+  isEstimated?: boolean;
 }
 
 export class LocationService {
   /**
-   * Fetches current GPS coordinates with high accuracy and fallback
+   * Fetches current GPS coordinates with high accuracy and transparent fallback flag.
    */
   static async getCurrentLocation(timeoutMs = 10000): Promise<GpsCoordinates> {
     return new Promise((resolve) => {
@@ -21,15 +22,18 @@ export class LocationService {
               longitude: position.coords.longitude,
               accuracy: position.coords.accuracy,
               timestamp: position.timestamp || Date.now(),
+              isEstimated: false,
             });
           },
           () => {
-            // Fallback: Campus UADER FCyT Concepción del Uruguay (-32.4825, -58.2321)
+            // Signal loss fallback: Campus UADER FCyT Concepción del Uruguay (-32.4825, -58.2321)
+            // Marked explicitly as estimated
             resolve({
               latitude: -32.4825,
               longitude: -58.2321,
-              accuracy: 8.5,
+              accuracy: undefined,
               timestamp: Date.now(),
+              isEstimated: true,
             });
           },
           { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 15000 }
@@ -38,8 +42,9 @@ export class LocationService {
         resolve({
           latitude: -32.4825,
           longitude: -58.2321,
-          accuracy: 10.0,
+          accuracy: undefined,
           timestamp: Date.now(),
+          isEstimated: true,
         });
       }
     });
