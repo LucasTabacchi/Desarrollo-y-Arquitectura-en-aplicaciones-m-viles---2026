@@ -78,9 +78,8 @@ export class SshService {
     command = '/system resource print'
   ): Promise<string> {
     try {
-      // In native environment, use SSHClient
       const client = new (SSHClient as any)(host, port, username, password);
-      if (client.connect) {
+      if (client && client.connect) {
         await client.connect();
         const output = await client.execute(command);
         if (client.disconnect) {
@@ -88,10 +87,11 @@ export class SshService {
         }
         return output;
       }
-      throw new Error('SSH client library is unavailable');
+      throw new Error('Librería cliente SSH no disponible en este entorno');
     } catch (err: any) {
-      // Realistic simulation for development/testing if target is unreachable
-      return this.simulateCommandOutput(command, host, username);
+      throw new Error(
+        `Error SSH en ${username}@${host}:${port} — ${err?.message || 'Fallo de autenticación o tiempo de espera agotado'}`
+      );
     }
   }
 

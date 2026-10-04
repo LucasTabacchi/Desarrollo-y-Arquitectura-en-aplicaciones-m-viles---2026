@@ -79,6 +79,32 @@ export const DeviceDetailScreen: React.FC = () => {
         } catch (_) {}
       }
     } catch (err: any) {
+      setTelemetry(null);
+      try {
+        const repos = getRepositories();
+        const diagId = `diag_${Date.now()}`;
+        await repos.diagnostics.create({
+          id: diagId,
+          type: 'snmp',
+          target: ip,
+          rawOutput: err?.message || 'Error de conexión SNMP',
+          status: 'failed',
+          createdAt: Date.now(),
+        });
+      } catch (dbErr) {
+        try {
+          const repos = await initDatabase();
+          const diagId = `diag_${Date.now()}`;
+          await repos.diagnostics.create({
+            id: diagId,
+            type: 'snmp',
+            target: ip,
+            rawOutput: err?.message || 'Error de conexión SNMP',
+            status: 'failed',
+            createdAt: Date.now(),
+          });
+        } catch (_) {}
+      }
       Alert.alert('Error SNMP', err?.message || 'No se pudo comunicar con el equipo');
     } finally {
       setLoading(false);
@@ -89,45 +115,10 @@ export const DeviceDetailScreen: React.FC = () => {
     runDiagnostic();
   }, [runDiagnostic]);
 
-  const currentUptime = telemetry?.uptimeFormatted || '12d 4h 32m';
-  const currentSysName = telemetry?.sysName || hostname;
-  const currentVendor = telemetry?.vendor || 'MikroTik';
-  const interfaces = telemetry?.interfaces?.length
-    ? telemetry.interfaces
-    : [
-        {
-          index: 1,
-          name: 'ge0/0/1',
-          operUp: true,
-          adminUp: true,
-          rxBytes: 44564480,
-          txBytes: 19084083,
-        },
-        {
-          index: 2,
-          name: 'ge0/0/2',
-          operUp: true,
-          adminUp: true,
-          rxBytes: 1258291,
-          txBytes: 419430,
-        },
-        {
-          index: 3,
-          name: 'ge0/0/3',
-          operUp: true,
-          adminUp: true,
-          rxBytes: 104857,
-          txBytes: 52428,
-        },
-        {
-          index: 4,
-          name: 'ge0/0/4',
-          operUp: false,
-          adminUp: false,
-          rxBytes: 0,
-          txBytes: 0,
-        },
-      ];
+  const currentUptime = telemetry?.uptimeFormatted || '— (Sin respuesta)';
+  const currentSysName = telemetry?.sysName || hostname || '—';
+  const currentVendor = telemetry?.vendor || 'Desconocido';
+  const interfaces = telemetry?.interfaces || [];
 
   return (
     <View style={styles.screen}>
@@ -153,7 +144,11 @@ export const DeviceDetailScreen: React.FC = () => {
               <Text style={styles.deviceName}>{currentSysName}</Text>
               <Text style={styles.deviceSub}>Fabricante: {currentVendor}</Text>
             </View>
-            <StatusBadge label="EN LÍNEA" variant="success" dot />
+            <StatusBadge
+              label={telemetry ? 'EN LÍNEA' : 'SIN RESPUESTA'}
+              variant={telemetry ? 'success' : 'critical'}
+              dot
+            />
           </View>
 
           <View style={styles.metaRow}>
@@ -295,24 +290,32 @@ export const DeviceDetailScreen: React.FC = () => {
             <Text style={[styles.th, { flex: 1.2 }]}>SALIDA</Text>
           </View>
 
-          {interfaces.map((row) => (
-            <View key={row.name || String(row.index)} style={styles.tableRow}>
-              <Text style={[styles.tdMono, { flex: 1.2 }]}>{row.name}</Text>
-              <View style={{ flex: 1 }}>
-                <StatusBadge
-                  label={row.operUp ? 'UP' : 'DOWN'}
-                  variant={row.operUp ? 'success' : 'critical'}
-                  dot
-                />
-              </View>
-              <Text style={[styles.tdMonoHighlight, { flex: 1.2 }]}>
-                {formatBytes(row.rxBytes)}
-              </Text>
-              <Text style={[styles.tdMono, { flex: 1.2 }]}>
-                {formatBytes(row.txBytes)}
+          {interfaces.length === 0 ? (
+            <View style={{ paddingVertical: spacing.md, alignItems: 'center' }}>
+              <Text style={{ ...typography.bodySm, color: colors.onSurfaceVariant }}>
+                Sin interfaces reportadas o equipo no responde vía SNMP
               </Text>
             </View>
-          ))}
+          ) : (
+            interfaces.map((row) => (
+              <View key={row.name || String(row.index)} style={styles.tableRow}>
+                <Text style={[styles.tdMono, { flex: 1.2 }]}>{row.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <StatusBadge
+                    label={row.operUp ? 'UP' : 'DOWN'}
+                    variant={row.operUp ? 'success' : 'critical'}
+                    dot
+                  />
+                </View>
+                <Text style={[styles.tdMonoHighlight, { flex: 1.2 }]}>
+                  {formatBytes(row.rxBytes)}
+                </Text>
+                <Text style={[styles.tdMono, { flex: 1.2 }]}>
+                  {formatBytes(row.txBytes)}
+                </Text>
+              </View>
+            ))
+          )}
         </Card>
 
         {/* SSH Console CTA */}

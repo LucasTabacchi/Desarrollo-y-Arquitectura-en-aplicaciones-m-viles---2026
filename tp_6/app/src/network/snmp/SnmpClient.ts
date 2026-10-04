@@ -78,6 +78,23 @@ export class SnmpClient {
 
           const response = parseSnmpPacket(uint8);
           if (response.requestId === requestId) {
+            if (response.errorStatus !== 0) {
+              const errNames: Record<number, string> = {
+                1: 'tooBig',
+                2: 'noSuchName',
+                3: 'badValue',
+                4: 'readOnly',
+                5: 'genErr',
+              };
+              const errDesc = errNames[response.errorStatus] || `código ${response.errorStatus}`;
+              cleanup();
+              reject(
+                new Error(
+                  `Error SNMP ${errDesc} en índice ${response.errorIndex} devuelto por ${host}`
+                )
+              );
+              return;
+            }
             cleanup();
             resolve(response);
           }
@@ -165,36 +182,9 @@ export class SnmpClient {
         interfaces: ifaces,
       };
     } catch (error: any) {
-      // In development / demo when device is not reachable, provide simulated realistic fallback
-      return {
-        sysName: `Nodo-${host.split('.').pop()}`,
-        sysDescr: 'RouterOS v7.14.3 (testing fallback)',
-        sysUptime: 1254300,
-        uptimeFormatted: '14d 12h 19m',
-        vendor: 'MikroTik',
-        cpuLoad: 24,
-        temperature: 42,
-        interfaces: [
-          {
-            index: 1,
-            name: 'ether1-wan',
-            mac: '48:8F:5A:21:44:B0',
-            adminUp: true,
-            operUp: true,
-            rxBytes: 154203940,
-            txBytes: 89432104,
-          },
-          {
-            index: 2,
-            name: 'ether2-lan',
-            mac: '48:8F:5A:21:44:B1',
-            adminUp: true,
-            operUp: true,
-            rxBytes: 948203940,
-            txBytes: 520432104,
-          },
-        ],
-      };
+      throw new Error(
+        `Error de telemetría SNMP en ${host}: ${error?.message || 'Equipo no responde'}`
+      );
     }
   }
 }
