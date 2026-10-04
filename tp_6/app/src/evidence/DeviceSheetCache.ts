@@ -139,12 +139,11 @@ export class DeviceSheetCache {
   /**
    * Resolves a device technical sheet using cache-first approach
    */
-  async resolveDeviceSheet(qrPayload: string): Promise<DeviceSheet> {
+  async resolveDeviceSheet(qrPayload: string, backendUrl = 'http://10.0.2.2:3000'): Promise<DeviceSheet> {
     const parsed = DeviceSheetCache.parseQrCode(qrPayload);
-
-    // Match catalog model
-    let catalogEntry = DEVICE_CATALOG.HG8245W5;
     const lower = (parsed.model || parsed.serialNumber || qrPayload).toLowerCase();
+
+    let catalogEntry: Omit<DeviceSheet, 'serialNumber' | 'mac' | 'ip'> | null = null;
 
     if (lower.includes('mikrotik') || lower.includes('hap') || lower.includes('rbd52')) {
       catalogEntry = DEVICE_CATALOG.HAP_AC2;
@@ -152,13 +151,59 @@ export class DeviceSheetCache {
       catalogEntry = DEVICE_CATALOG.LBE_5AC_GEN2;
     } else if (lower.includes('cisco') || lower.includes('sg250') || lower.includes('switch')) {
       catalogEntry = DEVICE_CATALOG.SG250_8P;
+    } else if (lower.includes('huawei') || lower.includes('hg8245') || lower.includes('ont') || lower.includes('hwtc')) {
+      catalogEntry = DEVICE_CATALOG.HG8245W5;
+    }
+
+    // Try remote fetch if online and model/sn is known
+    try {
+      const queryId = parsed.model || parsed.serialNumber || '';
+      if (queryId && typeof fetch === 'function') {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300);
+        try {
+          const res = await fetch(`${backendUrl}/sheets/${encodeURIComponent(queryId)}`, {
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (res && res.ok) {
+            const remoteSheet = await res.json();
+            if (remoteSheet && remoteSheet.model) {
+              catalogEntry = remoteSheet;
+            }
+          }
+        } catch (_) {
+          clearTimeout(timeoutId);
+        }
+      }
+    } catch (_) {
+      // Offline fallback: rely on local catalog
+    }
+
+    if (!catalogEntry) {
+      catalogEntry = {
+        model: parsed.model || `Equipo (${parsed.serialNumber || 'Desconocido'})`,
+        vendor: 'Genérico / Desconocido',
+        category: 'generic',
+        hardwareSpecs: {
+          ports: 'Ethernet RJ45',
+          firmwareDefault: 'N/A',
+        },
+        installationChecklist: [
+          'Verificar encendido y estado de LEDs',
+          'Comprobar continuidad de cableado',
+          'Registrar número de serie en ficha',
+        ],
+      };
     }
 
     const sheet: DeviceSheet = {
       ...catalogEntry,
-      serialNumber: parsed.serialNumber || 'SN-' + Math.abs(qrPayload.split('').reduce((a, b) => a + b.charCodeAt(0), 0)),
-      mac: parsed.mac || 'F4:C3:61:9A:82:10',
-      ip: parsed.ip || '192.168.1.254',
+      serialNumber:
+        parsed.serialNumber ||
+        'SN-' + Math.abs(qrPayload.split('').reduce((a, b) => a + b.charCodeAt(0), 0)),
+      mac: parsed.mac,
+      ip: parsed.ip,
     };
 
     // Cache to SQLite if repository available
@@ -166,7 +211,7 @@ export class DeviceSheetCache {
       try {
         await this.deviceRepo.upsert({
           id: `dev_${sheet.serialNumber}`,
-          ip: sheet.ip || '192.168.1.254',
+          ip: sheet.ip || '0.0.0.0',
           mac: sheet.mac,
           hostname: sheet.model,
           vendor: sheet.vendor,

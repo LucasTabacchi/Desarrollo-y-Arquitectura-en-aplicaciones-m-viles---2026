@@ -11,10 +11,10 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  Camera,
   useCameraDevice,
   useCameraPermission,
 } from 'react-native-vision-camera';
+import { CodeScanner } from 'react-native-vision-camera-barcode-scanner';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
@@ -31,23 +31,8 @@ export const QrScannerScreen: React.FC = () => {
 
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
-  const [identifiedSheet, setIdentifiedSheet] = useState<DeviceSheet | null>({
-    model: 'EchoLife HG8245W5',
-    vendor: 'Huawei',
-    category: 'ont',
-    serialNumber: 'HWTC78921B40',
-    mac: 'F4:C3:61:9A:82:10',
-    ip: '192.168.1.254',
-    hardwareSpecs: {
-      ports: '4x GE + 2x POTS + 1x USB + 1x GPON',
-      firmwareDefault: 'V500R019C00SPC120',
-      opticalPower: 'Rx -8 dBm a -27 dBm',
-    },
-    installationChecklist: [
-      'Verificar potencia óptica entre -15 y -24 dBm',
-      'Configurar VLAN 100 de datos',
-    ],
-  });
+  const [identifiedSheet, setIdentifiedSheet] = useState<DeviceSheet | null>(null);
+  const lastScannedCodeRef = React.useRef<string | null>(null);
 
   const cache = useMemo(() => new DeviceSheetCache(), []);
 
@@ -76,6 +61,19 @@ export const QrScannerScreen: React.FC = () => {
     []
   );
 
+  const onBarcodeScanned = useCallback(
+    (barcodes: any[]) => {
+      if (barcodes.length > 0 && barcodes[0].value) {
+        const val = String(barcodes[0].value).trim();
+        if (val && lastScannedCodeRef.current !== val) {
+          lastScannedCodeRef.current = val;
+          handleCodeDetected(val);
+        }
+      }
+    },
+    [handleCodeDetected]
+  );
+
   return (
     <View style={styles.screen}>
       <StatusHeader
@@ -94,10 +92,14 @@ export const QrScannerScreen: React.FC = () => {
         <View style={styles.viewfinderContainer}>
           {hasPermission && device && !showManualInput ? (
             <View style={styles.cameraBox}>
-              <Camera
+              <CodeScanner
                 style={StyleSheet.absoluteFill}
-                device={device}
-                isActive={true}
+                isActive={!showManualInput}
+                barcodeFormats={['all-formats']}
+                onBarcodeScanned={onBarcodeScanned}
+                onError={(err) => {
+                  console.warn('Barcode scanner error:', err);
+                }}
               />
               {/* Overlay guides */}
               <View style={[styles.corner, styles.cornerTL]} />
@@ -163,7 +165,7 @@ export const QrScannerScreen: React.FC = () => {
         </View>
 
         {/* Identified Device Sheet Card */}
-        {identifiedSheet && (
+        {identifiedSheet ? (
           <Card style={styles.resultCard} variant="high">
             <View style={styles.resultHeader}>
               <View style={styles.iconBox}>
@@ -206,8 +208,8 @@ export const QrScannerScreen: React.FC = () => {
                 variant="primary"
                 onPress={() =>
                   navigation.navigate('DeviceDetail', {
-                    ip: identifiedSheet.ip || '192.168.1.254',
-                    mac: identifiedSheet.mac || 'F4:C3:61:9A:82:10',
+                    ip: identifiedSheet.ip || '192.168.1.1',
+                    mac: identifiedSheet.mac || '00:00:00:00:00:00',
                     model: identifiedSheet.model,
                     hostname: identifiedSheet.model,
                   })
@@ -220,11 +222,23 @@ export const QrScannerScreen: React.FC = () => {
                 onPress={() =>
                   navigation.navigate('NewInstallation', {
                     initialDeviceName: identifiedSheet.model,
-                    initialIp: identifiedSheet.ip || '192.168.1.254',
-                    initialMac: identifiedSheet.mac || 'F4:C3:61:9A:82:10',
+                    initialIp: identifiedSheet.ip,
+                    initialMac: identifiedSheet.mac,
                   })
                 }
               />
+            </View>
+          </Card>
+        ) : (
+          <Card style={styles.resultCard} variant="surface">
+            <View style={styles.placeholderRow}>
+              <Icon name="qr_code_scanner" size={28} color={colors.onSurfaceVariant} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.placeholderTitle}>Esperando código QR / Barras</Text>
+                <Text style={styles.placeholderSub}>
+                  Alinee la cámara hacia el código en la etiqueta del equipo o ingrese el identificador manualmente arriba.
+                </Text>
+              </View>
             </View>
           </Card>
         )}
@@ -397,5 +411,20 @@ const styles = StyleSheet.create({
   actionButtonsCol: {
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  placeholderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  placeholderTitle: {
+    ...typography.labelLg,
+    color: colors.onSurface,
+  },
+  placeholderSub: {
+    ...typography.bodySm,
+    color: colors.onSurfaceVariant,
+    marginTop: 2,
   },
 });

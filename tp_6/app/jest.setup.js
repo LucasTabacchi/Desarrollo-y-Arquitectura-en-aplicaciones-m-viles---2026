@@ -158,5 +158,15 @@ jest.mock('react-native-blob-util', () => ({
   },
 }));
 
+jest.mock('react-native-vision-camera-barcode-scanner', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    CodeScanner: (props) => React.createElement(View, { ...props, testID: 'mock-code-scanner' }),
+    useBarcodeScanner: jest.fn(() => ({ scanCodes: jest.fn(() => []) })),
+    useBarcodeScannerOutput: jest.fn(() => ({})),
+  };
+});
+
 
 
