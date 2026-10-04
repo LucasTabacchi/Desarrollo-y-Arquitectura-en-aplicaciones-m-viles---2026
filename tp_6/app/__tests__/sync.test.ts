@@ -174,6 +174,60 @@ describe('T8: Sync Worker & Conflict Handling', () => {
       expect(resolvedInst?.status).toBe('synced');
     });
 
+    it('resolves conflict using keep_local by re-pushing local data', async () => {
+      const conflictId = 'outbox-conf-keep-local';
+      const entityId = 'inst-conf-keep-local';
+
+      const inst: Installation = {
+        id: entityId,
+        deviceName: 'Switch Ubiquiti',
+        deviceIp: '192.168.1.20',
+        siteName: 'Nodo Sur',
+        notes: 'Notas locales críticas',
+        status: 'conflict',
+        baseVersion: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await repos.installations.create(inst);
+      await repos.outbox.enqueue({
+        id: conflictId,
+        entityType: 'installation',
+        entityId,
+        payloadJson: JSON.stringify(inst),
+        status: 'conflict',
+      });
+
+      conflictStore.set(conflictId, {
+        conflictId,
+        entityId,
+        entityType: 'installation',
+        localVersion: inst,
+        serverVersion: {
+          deviceName: 'Switch Ubiquiti',
+          notes: 'Notas desactualizadas del servidor',
+          version: 2,
+        },
+      });
+
+      // Mock fetch 200 OK on force push
+      globalThis.fetch = jest.fn().mockImplementation(async () => ({
+        status: 200,
+        json: async () => ({
+          status: 'success',
+          processed: 1,
+          results: [{ id: conflictId, status: 'synced', version: 3 }],
+        }),
+      }));
+
+      await SyncWorker.resolveConflict(conflictId, 'keep_local', repos);
+      expect(conflictStore.has(conflictId)).toBe(false);
+
+      const resolvedInst = await repos.installations.findById(entityId);
+      expect(resolvedInst?.notes).toBe('Notas locales críticas');
+      expect(resolvedInst?.status).toBe('synced');
+    });
+
     it('retries with exponential backoff on network failure', async () => {
       const outboxId = 'outbox-err-01';
 

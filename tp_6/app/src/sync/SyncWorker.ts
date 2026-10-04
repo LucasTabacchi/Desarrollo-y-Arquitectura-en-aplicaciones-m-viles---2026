@@ -117,18 +117,20 @@ export class SyncWorker {
 
         const conflictItem = pendingItems.find((p) => p.id === conflictData.conflictId) || pendingItems[0];
         
-        conflictStore.set(conflictItem.id, {
+        const conflictRecord: ConflictRecord = {
           conflictId: conflictItem.id,
           entityId: conflictItem.entityId,
           entityType: conflictItem.entityType,
           localVersion: conflictData.localVersion || JSON.parse(conflictItem.payloadJson),
           serverVersion: conflictData.serverVersion,
-        });
+        };
 
-        // Mark item as conflict
+        conflictStore.set(conflictItem.id, conflictRecord);
+
+        // Mark item as conflict in SQLite with persisted conflict details
         await repos.db.execute(
           `UPDATE outbox SET status = 'conflict', error_message = ?, updated_at = ? WHERE id = ?`,
-          ['Conflict detected with server version', Date.now(), conflictItem.id]
+          [JSON.stringify(conflictRecord), Date.now(), conflictItem.id]
         );
 
         if (conflictItem.entityType === 'installation') {
@@ -171,9 +173,33 @@ export class SyncWorker {
     repos?: DatabaseRepositories
   ): Promise<void> {
     const activeRepos = repos || getRepositories();
-    const conflict = conflictStore.get(conflictId);
+    let conflict = conflictStore.get(conflictId);
+
+    if (!conflict) {
+      try {
+        const res = await activeRepos.db.execute(
+          `SELECT id, entity_id, entity_type, payload_json, error_message FROM outbox WHERE id = ?`,
+          [conflictId]
+        );
+        if (res.rows.length > 0 && res.rows[0].error_message && res.rows[0].error_message.startsWith('{')) {
+          conflict = JSON.parse(res.rows[0].error_message);
+          if (conflict) {
+            conflictStore.set(conflictId, conflict);
+          }
+        }
+      } catch (_) {}
+    }
 
     if (resolution === 'keep_local') {
+      // Re-enable item in outbox so peekPending picks it up
+      await activeRepos.db.execute(
+        `UPDATE outbox SET status = 'pending', next_retry_at = 0, error_message = NULL, updated_at = ? WHERE id = ?`,
+        [Date.now(), conflictId]
+      );
+      if (conflict?.entityType === 'installation') {
+        await activeRepos.installations.updateStatus(conflict.entityId, 'pending');
+      }
+
       // Force push local version to backend
       await this.syncAll({ force: true, repos: activeRepos });
       await activeRepos.outbox.markSuccess(conflictId);

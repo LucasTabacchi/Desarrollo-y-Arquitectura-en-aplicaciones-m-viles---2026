@@ -123,26 +123,34 @@ app.post('/sync/push', (req, res) => {
       payload = {};
     }
 
-    // Conflict simulation: if payload explicitly requests conflict or entityId matches conflict-test
+    // Conflict simulation or real version check:
     const isConflictSimulated =
       payload.simulateConflict === true ||
       entityId === 'conflict-test' ||
       entityId?.includes('conflict');
 
     const currentServerVersion = serverDatabase.versions.get(entityId) || 1;
+    const isVersionOutdated = (baseVersion || 1) < currentServerVersion;
 
-    if (!force && isConflictSimulated && (baseVersion || 1) < 2) {
+    if (!force && (isConflictSimulated || isVersionOutdated)) {
+      const existingRecord =
+        serverDatabase.installations.get(entityId) ||
+        serverDatabase.diagnostics.get(entityId) || {
+          id: entityId,
+          deviceName: payload.deviceName || 'Router MikroTik hAP ac2',
+          siteName: payload.siteName || 'Sitio Azotea Norte',
+          notes: 'Equipo registrado en Nodo Central. Notas distintas a las locales.',
+          version: currentServerVersion,
+          updatedAt: Date.now(),
+        };
+
       return res.status(409).json({
         error: 'Conflict detected',
         conflictId: id,
         entityId: entityId,
         serverVersion: {
-          id: entityId,
-          deviceName: payload.deviceName || 'Router MikroTik hAP ac2',
-          siteName: payload.siteName || 'Sitio Azotea Norte',
-          notes: 'Equipo registrado en Nodo Central. Notas distintas a las locales.',
-          version: 2,
-          updatedAt: Date.now(),
+          ...existingRecord,
+          version: Math.max(existingRecord.version || 1, 2),
         },
         localVersion: payload,
       });
