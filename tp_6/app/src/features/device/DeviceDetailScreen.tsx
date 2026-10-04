@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +34,8 @@ export const DeviceDetailScreen: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'snmp' | 'ssh'>('snmp');
   const [community, setCommunity] = useState('public');
+  const [isEditingCommunity, setIsEditingCommunity] = useState(false);
+  const [tempCommunity, setTempCommunity] = useState('public');
   const [loading, setLoading] = useState(false);
   const [telemetry, setTelemetry] = useState<DeviceTelemetry | null>(null);
 
@@ -219,16 +225,11 @@ export const DeviceDetailScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.editBtn}
             onPress={() => {
-              Alert.prompt
-                ? Alert.prompt(
-                    'Comunidad SNMP',
-                    'Ingrese la cadena de comunidad',
-                    (text) => text && setCommunity(text),
-                    'plain-text',
-                    community
-                  )
-                : Alert.alert('Comunidad SNMP', 'Configuración activa: ' + community);
+              setTempCommunity(community);
+              setIsEditingCommunity(true);
             }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
           >
             <Icon name="edit" size={16} color={colors.primary} />
           </TouchableOpacity>
@@ -326,6 +327,63 @@ export const DeviceDetailScreen: React.FC = () => {
           onPress={() => navigation.navigate('SshConsole', { ip, alias: currentSysName })}
         />
       </ScrollView>
+
+      {/* Edit SNMP Community Modal */}
+      <Modal
+        visible={isEditingCommunity}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditingCommunity(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Icon name="lock" size={20} color={colors.primary} />
+              <Text style={styles.modalTitle}>Comunidad SNMP</Text>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Ingresá la comunidad para autenticar las consultas MIB-II (v1 / v2c) en este equipo:
+            </Text>
+
+            <TextInput
+              style={styles.communityInput}
+              value={tempCommunity}
+              onChangeText={setTempCommunity}
+              placeholder="ej. public, noc_read, telecom"
+              placeholderTextColor={colors.onSurfaceVariant}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+            />
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsEditingCommunity(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={() => {
+                  const trimmed = tempCommunity.trim();
+                  if (trimmed) {
+                    setCommunity(trimmed);
+                  }
+                  setIsEditingCommunity(false);
+                }}
+              >
+                <Text style={styles.modalSaveText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -529,6 +587,74 @@ const styles = StyleSheet.create({
   tdMonoHighlight: {
     ...typography.telemetryMonoSm,
     color: colors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(3, 14, 32, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.surfaceStroke,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  modalTitle: {
+    ...typography.headlineSm,
+    color: colors.onSurface,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    ...typography.bodySm,
+    color: colors.onSurfaceVariant,
+    lineHeight: 18,
+  },
+  communityInput: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    color: colors.onSurface,
+    fontSize: 15,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  modalCancelBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+  },
+  modalCancelText: {
+    ...typography.labelSm,
+    color: colors.onSurfaceVariant,
+  },
+  modalSaveBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 8,
+  },
+  modalSaveText: {
+    ...typography.labelSm,
+    color: colors.onPrimary,
+    fontWeight: '600',
   },
 });
 
