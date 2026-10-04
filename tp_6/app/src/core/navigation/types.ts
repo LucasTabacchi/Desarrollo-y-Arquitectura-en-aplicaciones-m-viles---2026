@@ -16,12 +16,15 @@ export type RootStackParamList = {
     hostname?: string;
     vendor?: string;
     model?: string;
+    diagnosticId?: string;
   };
   SshConsole: {
     ip: string;
     user?: string;
     port?: number;
     alias?: string;
+    initialOutput?: string;
+    diagnosticId?: string;
   };
   QrScanner: undefined;
   NewInstallation: {

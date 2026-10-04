@@ -30,6 +30,7 @@ export const DeviceDetailScreen: React.FC = () => {
     mac = 'F4:C3:61:9A:82:10',
     model = 'Equipo de Red',
     hostname = 'Nodo-Principal',
+    diagnosticId,
   } = route.params || {};
 
   const [activeTab, setActiveTab] = useState<'snmp' | 'ssh'>('snmp');
@@ -38,14 +39,44 @@ export const DeviceDetailScreen: React.FC = () => {
   const [tempCommunity, setTempCommunity] = useState('public');
   const [loading, setLoading] = useState(false);
   const [telemetry, setTelemetry] = useState<DeviceTelemetry | null>(null);
+  const [historicalTimestamp, setHistoricalTimestamp] = useState<number | null>(null);
 
   const snmpClient = React.useMemo(() => new SnmpClient(), []);
+
+  const loadHistoricalDiagnostic = useCallback(async (id: string) => {
+    setLoading(true);
+    try {
+      let repos;
+      try {
+        repos = getRepositories();
+      } catch (_) {
+        repos = await initDatabase();
+      }
+      const record = await repos.diagnostics.findById(id);
+      if (record) {
+        setHistoricalTimestamp(record.createdAt);
+        if (record.parsedTelemetryJson) {
+          try {
+            const data: DeviceTelemetry = JSON.parse(record.parsedTelemetryJson);
+            setTelemetry(data);
+          } catch (_) {
+            setTelemetry(null);
+          }
+        }
+      }
+    } catch (_) {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const runDiagnostic = useCallback(async () => {
     setLoading(true);
     try {
       const data = await snmpClient.queryDeviceTelemetry(ip, community);
       setTelemetry(data);
+      setHistoricalTimestamp(null);
 
       // Save diagnostic result to SQLite store & outbox
       try {
@@ -118,8 +149,12 @@ export const DeviceDetailScreen: React.FC = () => {
   }, [ip, community, snmpClient]);
 
   useEffect(() => {
-    runDiagnostic();
-  }, [runDiagnostic]);
+    if (diagnosticId) {
+      loadHistoricalDiagnostic(diagnosticId);
+    } else {
+      runDiagnostic();
+    }
+  }, [diagnosticId, loadHistoricalDiagnostic, runDiagnostic]);
 
   const currentUptime = telemetry?.uptimeFormatted || '— (Sin respuesta)';
   const currentSysName = telemetry?.sysName || hostname || '—';
@@ -168,6 +203,24 @@ export const DeviceDetailScreen: React.FC = () => {
             </View>
           </View>
         </Card>
+
+        {historicalTimestamp && (
+          <View style={styles.historyNotice}>
+            <Icon name="history" size={16} color={colors.secondary} />
+            <Text style={styles.historyNoticeText}>
+              Registro histórico del{' '}
+              {new Date(historicalTimestamp).toLocaleDateString([], {
+                day: '2-digit',
+                month: '2-digit',
+              })}{' '}
+              a las{' '}
+              {new Date(historicalTimestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
+          </View>
+        )}
 
         {/* Tab Selector SNMP / SSH */}
         <View style={styles.tabSelector}>
@@ -655,6 +708,22 @@ const styles = StyleSheet.create({
     ...typography.labelSm,
     color: colors.onPrimary,
     fontWeight: '600',
+  },
+  historyNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerHigh,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.secondary,
+  },
+  historyNoticeText: {
+    ...typography.bodySm,
+    color: colors.onSurface,
+    fontWeight: '500',
   },
 });
 

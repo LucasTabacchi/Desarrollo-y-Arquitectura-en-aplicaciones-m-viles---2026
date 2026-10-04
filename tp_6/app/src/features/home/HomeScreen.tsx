@@ -65,7 +65,15 @@ export const HomeScreen: React.FC = () => {
           status: d.status,
           icon: (d.type === 'snmp' ? 'router' : 'terminal') as 'router' | 'terminal',
           createdAt: d.createdAt,
-          onPress: () => navigation.navigate('DeviceDetail', { ip: d.target }),
+          onPress: () =>
+            d.type === 'snmp'
+              ? navigation.navigate('DeviceDetail', { ip: d.target, diagnosticId: d.id })
+              : navigation.navigate('SshConsole', {
+                  ip: d.target,
+                  alias: d.target,
+                  initialOutput: d.rawOutput,
+                  diagnosticId: d.id,
+                }),
         })),
         ...insts.slice(0, 5).map((inst) => ({
           id: `inst-${inst.id}`,

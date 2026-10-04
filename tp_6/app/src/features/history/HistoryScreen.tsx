@@ -86,6 +86,7 @@ export const HistoryScreen: React.FC = () => {
           syncStatus: diag.status === 'synced' ? 'synced' : 'pending',
           timeGroup: group,
           timeStr: formatTimeStr(diag.createdAt, group),
+          rawPayload: diag,
         });
       }
 
@@ -153,11 +154,14 @@ export const HistoryScreen: React.FC = () => {
         ip: item.ip || '192.168.1.254',
         model: item.deviceName,
         hostname: item.deviceName,
+        diagnosticId: item.id,
       });
     } else if (item.type === 'ssh') {
       navigation.navigate('SshConsole', {
         ip: item.ip || '192.168.1.1',
         alias: item.deviceName,
+        initialOutput: item.rawPayload?.rawOutput,
+        diagnosticId: item.id,
       });
     }
   };

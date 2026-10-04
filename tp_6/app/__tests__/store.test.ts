@@ -93,6 +93,14 @@ describe('Store & SQLite Repositories', () => {
 
       const allDiags = await repos.diagnostics.listAll();
       expect(allDiags).toHaveLength(1);
+
+      const byId = await repos.diagnostics.findById('diag-1');
+      expect(byId).not.toBeNull();
+      expect(byId?.id).toBe('diag-1');
+      expect(byId?.parsedTelemetryJson).toBe('{"sysDescr":"RouterOS"}');
+
+      const notFound = await repos.diagnostics.findById('non-existent');
+      expect(notFound).toBeNull();
     });
   });
 

@@ -23,15 +23,21 @@ import { getRepositories, initDatabase } from '../../store';
 export const SshConsoleScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'SshConsole'>>();
-  const { ip = '192.168.1.1', user = 'admin', port = 22, alias = 'Equipo' } =
-    route.params || {};
+  const {
+    ip = '192.168.1.1',
+    user = 'admin',
+    port = 22,
+    alias = 'Equipo',
+    initialOutput,
+  } = route.params || {};
 
   const sshService = useMemo(() => new SshService(), []);
   const scrollRef = useRef<any>(null);
 
   const [password, setPassword] = useState('');
   const [terminalText, setTerminalText] = useState(
-    `SSH Terminal Session v1.0\nTarget: ${user}@${ip}:${port}\nSecurity: Hardware Keystore Verified\n\n[${user}@${ip}] > `
+    initialOutput ||
+      `SSH Terminal Session v1.0\nTarget: ${user}@${ip}:${port}\nSecurity: Hardware Keystore Verified\n\n[${user}@${ip}] > `
   );
   const [commandInput, setCommandInput] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);

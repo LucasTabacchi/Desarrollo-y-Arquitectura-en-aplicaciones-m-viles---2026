@@ -30,6 +30,15 @@ export class DiagnosticRepository {
     return res.rows.map(this.mapRow);
   }
 
+  async findById(id: string): Promise<Diagnostic | null> {
+    const res = await this.db.execute<any>(
+      `SELECT * FROM diagnostics WHERE id = ? LIMIT 1`,
+      [id]
+    );
+    if (!res.rows.length) return null;
+    return this.mapRow(res.rows[0]);
+  }
+
   async listAll(limit = 50): Promise<Diagnostic[]> {
     const res = await this.db.execute<any>(
       `SELECT * FROM diagnostics ORDER BY created_at DESC LIMIT ?`,
