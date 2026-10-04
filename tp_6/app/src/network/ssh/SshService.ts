@@ -78,12 +78,60 @@ export class SshService {
     command = '/system resource print'
   ): Promise<string> {
     try {
-      const client = new (SSHClient as any)(host, port, username, password);
-      if (client && client.connect) {
-        await client.connect();
+      const effectivePassword = typeof password === 'string' ? password : '';
+      let client: any = null;
+
+      // Prefer the official connectWithPassword static factory
+      if (typeof (SSHClient as any)?.connectWithPassword === 'function') {
+        client = await (SSHClient as any).connectWithPassword(
+          host,
+          port,
+          username,
+          effectivePassword
+        );
+      } else {
+        // Fallback: constructor requires a callback on Android to prevent "undefined is not a function"
+        client = await new Promise((resolve, reject) => {
+          let resolved = false;
+          try {
+            const inst = new (SSHClient as any)(
+              host,
+              port,
+              username,
+              effectivePassword,
+              (error: any) => {
+                if (resolved) return;
+                resolved = true;
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve(inst);
+                }
+              }
+            );
+
+            // In mocked or sync environments
+            if (inst && typeof inst.execute === 'function' && !inst.connect) {
+              if (!resolved) {
+                resolved = true;
+                resolve(inst);
+              }
+            }
+          } catch (initErr) {
+            if (!resolved) {
+              resolved = true;
+              reject(initErr);
+            }
+          }
+        });
+      }
+
+      if (client && typeof client.execute === 'function') {
         const output = await client.execute(command);
-        if (client.disconnect) {
-          await client.disconnect();
+        if (typeof client.disconnect === 'function') {
+          try {
+            client.disconnect();
+          } catch (_) {}
         }
         return output;
       }

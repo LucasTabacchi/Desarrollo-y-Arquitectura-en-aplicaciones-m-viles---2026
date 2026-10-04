@@ -94,11 +94,17 @@ jest.mock('react-native-keychain', () => ({
 }));
 
 jest.mock('@dylankenneally/react-native-ssh-sftp', () => {
-  const MockClient = jest.fn().mockImplementation(() => ({
+  const MockClientInstance = {
     connect: jest.fn(async () => {}),
     execute: jest.fn(async (cmd) => `Output of: ${cmd}\nstatus: OK`),
     disconnect: jest.fn(async () => {}),
-  }));
+  };
+  const MockClient: any = jest.fn().mockImplementation((host, port, username, password, callback) => {
+    if (callback) callback(null);
+    return MockClientInstance;
+  });
+  MockClient.connectWithPassword = jest.fn(async () => MockClientInstance);
+  MockClient.connectWithKey = jest.fn(async () => MockClientInstance);
   return {
     __esModule: true,
     default: MockClient,
