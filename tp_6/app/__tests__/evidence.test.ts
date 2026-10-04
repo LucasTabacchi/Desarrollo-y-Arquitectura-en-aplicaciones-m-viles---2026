@@ -1,5 +1,6 @@
 import { LocationService } from '../src/evidence/LocationService';
 import { DeviceSheetCache, DEVICE_CATALOG } from '../src/evidence/DeviceSheetCache';
+import { PdfReportService } from '../src/evidence/PdfReportService';
 import { MockDatabaseAdapter } from '../src/store/db/MockDatabaseAdapter';
 import { initializeSchema } from '../src/store/schema';
 import { DeviceRepository } from '../src/store/repositories/DeviceRepository';
@@ -57,6 +58,57 @@ describe('Evidence, GPS & Device Sheet Cache', () => {
       expect(devices.length).toBe(1);
       expect(devices[0].vendor).toBe('MikroTik');
       expect(devices[0].cachedSheetJson).toBeDefined();
+    });
+  });
+
+  describe('PdfReportService HTML Sanitization & Generation', () => {
+    it('should sanitize HTML injection in notes, technician, and equipment names', () => {
+      const html = PdfReportService.generateHtml({
+        reportId: 'REP-001',
+        siteName: 'Nodo <Norte> & "Principal"',
+        technicianName: 'Juan <script>alert(1)</script>',
+        date: '2026-10-04',
+        equipment: {
+          name: 'Switch <b>Pro</b>',
+          ip: '192.168.1.1',
+          mac: '00:11:22:33:44:55',
+        },
+        gps: {
+          latitude: -32.48,
+          longitude: -58.23,
+        },
+        photos: [],
+        notes: '<img src=x onerror=alert(1)> Notas de prueba',
+      });
+
+      expect(html).not.toContain('<script>');
+      expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+      expect(html).not.toContain('<img src=x');
+      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+      expect(html).toContain('Nodo &lt;Norte&gt; &amp; &quot;Principal&quot;');
+    });
+
+    it('should generate PDF report through converter', async () => {
+      const filePath = await PdfReportService.generateReport({
+        reportId: 'REP-002',
+        siteName: 'Nodo Sur',
+        technicianName: 'Carlos Gómez',
+        date: '2026-10-04',
+        equipment: {
+          name: 'MikroTik Router',
+          ip: '192.168.1.254',
+          mac: 'AA:BB:CC:DD:EE:FF',
+        },
+        gps: {
+          latitude: -32.48,
+          longitude: -58.23,
+          accuracy: 5,
+        },
+        photos: [],
+        notes: 'Todo verificado.',
+      });
+
+      expect(filePath).toContain('reporte_rep-002.pdf');
     });
   });
 });

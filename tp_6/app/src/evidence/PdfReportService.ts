@@ -30,6 +30,15 @@ export interface InstallationReportData {
   notes: string;
 }
 
+export function escapeHtml(str: string = ''): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export class PdfReportService {
   /**
    * Generates the complete, self-contained HTML template for the installation report.
@@ -39,6 +48,15 @@ export class PdfReportService {
     const accuracyBadge = data.gps.accuracy ? ` (±${Math.round(data.gps.accuracy)} m)` : ' (Estimada de referencia)';
     const coordsStr = `${data.gps.latitude.toFixed(4)}, ${data.gps.longitude.toFixed(4)}`;
 
+    const safeReportId = escapeHtml(data.reportId);
+    const safeSiteName = escapeHtml(data.siteName);
+    const safeTechnician = escapeHtml(data.technicianName);
+    const safeDate = escapeHtml(data.date);
+    const safeEquipName = escapeHtml(data.equipment.name);
+    const safeEquipIp = escapeHtml(data.equipment.ip);
+    const safeEquipMac = escapeHtml(data.equipment.mac);
+    const safeNotes = escapeHtml(data.notes || 'Instalación completada y verificada de conformidad técnica.');
+
     const photosHtml = data.photos && data.photos.length > 0
       ? data.photos
           .map(
@@ -46,12 +64,13 @@ export class PdfReportService {
               const photoCoords = (p.latitude !== undefined && p.longitude !== undefined)
                 ? `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`
                 : coordsStr;
+              const safeLabel = escapeHtml(p.label);
               return `
           <div style="flex: 1; min-width: 140px; margin: 4px; background: #E2E8F0; border-radius: 8px; overflow: hidden; position: relative;">
-            <img src="${p.uri}" alt="${p.label}" style="width: 100%; height: 110px; object-fit: cover; display: block;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-            <div style="display: none; height: 110px; background: #16263D; color: #A4C9FF; align-items: center; justify-content: center; font-size: 11px; font-family: monospace;">[${p.label}]</div>
+            <img src="${p.uri}" alt="${safeLabel}" style="width: 100%; height: 110px; object-fit: cover; display: block;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+            <div style="display: none; height: 110px; background: #16263D; color: #A4C9FF; align-items: center; justify-content: center; font-size: 11px; font-family: monospace;">[${safeLabel}]</div>
             <div style="position: absolute; bottom: 4px; left: 4px; right: 4px; background: rgba(15, 23, 42, 0.85); color: #FFFFFF; font-size: 9px; font-family: monospace; text-align: center; border-radius: 4px; padding: 2px;">
-              ${p.label} · ${photoCoords}
+              ${safeLabel} · ${photoCoords}
             </div>
           </div>
         `;
@@ -64,7 +83,7 @@ export class PdfReportService {
       ? `
       <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #E2E8F0;">
         <span style="color: #64748B;">Número de serie:</span>
-        <span style="font-family: monospace; font-weight: 600; color: #0F172A;">${data.equipment.serialNumber}</span>
+        <span style="font-family: monospace; font-weight: 600; color: #0F172A;">${escapeHtml(data.equipment.serialNumber)}</span>
       </div>`
       : '';
 
@@ -72,7 +91,7 @@ export class PdfReportService {
       ? `
       <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #E2E8F0;">
         <span style="color: #64748B;">Potencia óptica (Rx):</span>
-        <span style="font-family: monospace; font-weight: 600; color: #00A56C;">${data.equipment.opticalPower}</span>
+        <span style="font-family: monospace; font-weight: 600; color: #00A56C;">${escapeHtml(data.equipment.opticalPower)}</span>
       </div>`
       : '';
 
@@ -81,7 +100,7 @@ export class PdfReportService {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Reporte de Instalación - ${data.reportId}</title>
+  <title>Reporte de Instalación - ${safeReportId}</title>
   <style>
     body {
       font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -201,21 +220,21 @@ export class PdfReportService {
       <p>NETWORK DIAGNOSTICS SUITE • TELECOM EVIDENCE</p>
       <h1>Reporte de Instalación</h1>
     </div>
-    <div class="report-id">${data.reportId}</div>
+    <div class="report-id">${safeReportId}</div>
   </div>
 
   <div class="grid-meta">
     <div class="meta-col">
       <div class="meta-label">Sitio</div>
-      <div class="meta-value">${data.siteName}</div>
+      <div class="meta-value">${safeSiteName}</div>
     </div>
     <div class="meta-col">
       <div class="meta-label">Fecha</div>
-      <div class="meta-value">${data.date}</div>
+      <div class="meta-value">${safeDate}</div>
     </div>
     <div class="meta-col">
       <div class="meta-label">Técnico</div>
-      <div class="meta-value">${data.technicianName}</div>
+      <div class="meta-value">${safeTechnician}</div>
     </div>
   </div>
 
@@ -223,15 +242,15 @@ export class PdfReportService {
   <div class="card-block">
     <div class="kv-row">
       <span style="color: #64748B;">Nombre:</span>
-      <span style="font-weight: 600; color: #0F172A;">${data.equipment.name}</span>
+      <span style="font-weight: 600; color: #0F172A;">${safeEquipName}</span>
     </div>
     <div class="kv-row">
       <span style="color: #64748B;">Dirección IP:</span>
-      <span style="font-family: monospace; font-weight: 600; color: #0F172A;">${data.equipment.ip}</span>
+      <span style="font-family: monospace; font-weight: 600; color: #0F172A;">${safeEquipIp}</span>
     </div>
     <div class="kv-row">
       <span style="color: #64748B;">Dirección MAC:</span>
-      <span style="font-family: monospace; font-weight: 600; color: #0F172A;">${data.equipment.mac}</span>
+      <span style="font-family: monospace; font-weight: 600; color: #0F172A;">${safeEquipMac}</span>
     </div>
     ${serialRow}
     ${opticalRow}
@@ -249,7 +268,7 @@ export class PdfReportService {
 
   <div class="section-title">Notas Técnicas</div>
   <div class="notes-box">
-    ${data.notes || 'Instalación completada y verificada de conformidad técnica.'}
+    ${safeNotes}
   </div>
 
   <div class="footer">
@@ -285,13 +304,17 @@ export class PdfReportService {
       } else if (typeof pdfModule.default?.convert === 'function') {
         result = await pdfModule.default.convert(options);
       } else {
-        result = { filePath: `${fileName}.pdf` };
+        throw new Error('Módulo react-native-html-to-pdf no disponible');
       }
 
-      return result?.filePath || `${fileName}.pdf`;
-    } catch (error) {
-      console.warn('[PdfReportService] Error generating PDF, returning fallback path:', error);
-      return `${fileName}.pdf`;
+      if (!result?.filePath) {
+        throw new Error('La conversión a PDF no produjo una ruta de archivo válida');
+      }
+
+      return result.filePath;
+    } catch (error: any) {
+      console.error('[PdfReportService] Error generating PDF:', error);
+      throw new Error(`Fallo en generación de reporte PDF: ${error?.message || error}`);
     }
   }
 }

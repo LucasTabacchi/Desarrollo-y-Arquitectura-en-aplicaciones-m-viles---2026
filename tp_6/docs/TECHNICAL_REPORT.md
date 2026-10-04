@@ -58,7 +58,7 @@ graph TD
 
 Las abstracciones habituales de red en aplicaciones móviles se circunscriben al protocolo HTTP/REST, careciendo de soporte directo para protocolos binarios de bajo nivel. Para comunicarse con equipamiento de red sobre el puerto UDP 161 sin depender de librerías nativas externas en C++ o Java, se diseñó e implementó un **códec ASN.1 / BER (Basic Encoding Rules) y un analizador sintáctico de PDUs SNMP v1/v2c en TypeScript puro**.
 
-### 2.1 Códec ASN.1 BER (`src/protocols/snmp/BerCodec.ts`)
+### 2.1 Códec ASN.1 BER (`src/network/snmp/BerCodec.ts`)
 
 Las reglas básicas de codificación (BER) operan bajo una estructura Tipo-Longitud-Valor (TLV):
 1. **Identificador (Tag):** Define el tipo de dato, la clase (Universal, Application, Context-specific) y la forma (Primitivo vs. Construido).
@@ -87,7 +87,7 @@ Los primeros dos subidentificadores $X$ e $Y$ del OID (por ejemplo, `1.3` para `
 
 $$\text{Valor} = \sum_{i=0}^{k-1} (B_i \ \& \ 0x7F) \cdot 128^{(k-1-i)}$$
 
-### 2.2 Estructura del Mensaje SNMP y Construcción de PDUs (`src/protocols/snmp/SnmpClient.ts`)
+### 2.2 Estructura del Mensaje SNMP y Construcción de PDUs (`src/network/snmp/SnmpClient.ts`)
 
 La trama de un mensaje SNMPv2c respeta la siguiente jerarquía:
 
@@ -148,7 +148,7 @@ Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo
 - **Desreferenciación Efímera en Memoria:** El secreto en texto claro solo se extrae del enclave seguro en el instante exacto de abrir la sesión SSH y se libera de memoria una vez autenticada la conexión.
 - **Saneamiento de la Cola Outbox:** Los paquetes de datos preparados para sincronización hacia el backend no incluyen credenciales ni material criptográfico sensible.
 
-### 3.2 Servicio de Comandos SSH (`src/protocols/ssh/SshService.ts`)
+### 3.2 Servicio de Comandos SSH (`src/network/ssh/SshService.ts`)
 
 El servicio SSH provee plantillas de comandos optimizadas por fabricante:
 
@@ -227,11 +227,11 @@ Valores de configuración:
 
 Si el servidor central detecta que la entidad fue modificada concurrentemente, responde con código HTTP `409 Conflict` incluyendo la propiedad `server_version`.
 1. El elemento en la cola pasa a `status = 'conflict'`.
-2. El detalle del conflicto se almacena en el `ConflictStore` local.
+2. El detalle del conflicto se almacena en el `ConflictStore` local y en el campo `error_message` de la tabla outbox para resiliencia a reinicios.
 3. La interfaz visual alerta al técnico y habilita la pantalla de resolución (`SyncConflictScreen.tsx`).
 4. El técnico compara las diferencias lado a lado:
-   - **"Mantener mía" (Keep Local):** Sobrescribe el servidor forzando el envío con versión incrementada.
-   - **"Usar servidor" (Use Server):** Descarta el registro local en conflicto y adopta la versión oficial del backend.
+   - **"Mantener mía" (Keep Local):** Restaura el elemento a `status = 'pending'`, reintenta el push al servidor con `force: true` y actualiza la entidad local a `synced`.
+   - **"Usar servidor" (Use Server):** Descarta el registro local en conflicto, adopta la versión oficial del backend y marca el elemento outbox como sincronizado.
 
 ```mermaid
 sequenceDiagram
@@ -264,14 +264,27 @@ sequenceDiagram
     end
 ```
 
+### 4.5 Justificación Tecnológica: Selección de `@op-engineering/op-sqlite` frente a `WatermelonDB`
+
+El enunciado del proyecto requería la implementación de persistencia local offline-first robusta, permitiendo optar entre **SQLite nativo** o **WatermelonDB**. La decisión de ingeniería de seleccionar `@op-engineering/op-sqlite` responde a los siguientes factores arquitectónicos críticos:
+
+1. **Rendimiento C++ JSI Directo sin Serialización Bridge:**  
+   `op-sqlite` utiliza enlaces directos a nivel C++ mediante JavaScript Interface (JSI). Las operaciones de lectura/escritura en la base de datos se ejecutan en memoria compartida sin serializar ni deserializar cadenas JSON a través del bridge asincrónico tradicional de React Native, alcanzando velocidades hasta 10 veces superiores en inserciones masivas de telemetría.
+2. **Compatibilidad Plena con React Native 0.87 (New Architecture - Fabric & TurboModules):**  
+   React Native 0.87 opera con la Nueva Arquitectura habilitada por defecto. `op-sqlite` posee soporte nativo para TurboModules y C++ JSI de primera clase, mientras que WatermelonDB históricamente arrastra dependencias del bridge legado y requiere adaptadores complejos de threading para no bloquear la interfaz en Fabric.
+3. **Control Transaccional ACID y SQL Estándar:**  
+   La gestión de colas Outbox y diagnósticos exige garantías transaccionales ACID estrictas (`BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK`). `op-sqlite` ofrece SQL relacional ANSI puro y transacciones atómicas síncronas/asíncronas, permitiendo modelar máquinas de estados exactas sin verse restringido por los esquemas de observables reactivos de WatermelonDB.
+4. **Baja Huella de Memoria en Dispositivos de Campo:**  
+   Los dispositivos móviles utilizados por cuadrillas técnicas en campo suelen ser terminales Android de gama media o de uso rudo con memoria RAM acotada. Prescindir de la sobrecarga de un motor de observables en memoria (como el adapter RxJS/LokiJS de WatermelonDB) garantiza estabilidad operativa y previene fallos por falta de memoria (Out-of-Memory).
+
 ---
 
 ## 5. Identificación de Equipos y Motor de Evidencia de Campo
 
-### 5.1 Escaneo de Códigos QR y de Barras (`src/services/DeviceSheetCache.ts` y `QrScannerScreen.tsx`)
+### 5.1 Escaneo de Códigos QR y de Barras (`src/evidence/DeviceSheetCache.ts` y `QrScannerScreen.tsx`)
 
 Los equipos de telecomunicaciones presentan etiquetas con números de serie, direcciones MAC o enlaces de aprovisionamiento en formato QR o Code128.
-- **Captura en Tiempo Real:** Integración con `react-native-vision-camera` (v5) y frame processor de MLKit.
+- **Captura en Tiempo Real:** Integración con `react-native-vision-camera-barcode-scanner` y frame processor de MLKit para lectura omnidireccional (`all-formats`).
 - **Analizador Multiformato:** Extrae la identificación de equipos a partir de:
   - Estructuras JSON: `{"serial": "HUAW123456", "model": "EchoLife HG8245H", ...}`
   - URLs de inventario: `https://telecom.net/dev?id=HUAW123456&model=HG8245H`
@@ -279,18 +292,18 @@ Los equipos de telecomunicaciones presentan etiquetas con números de serie, dir
   - Números de serie estándar: `SN-1234567890`
 - **Catálogo Técnico Fuera de Línea:** Sin conexión a internet, los modelos reconocidos se vinculan de inmediato a una base local con especificaciones de puertos, frecuencias y umbrales ópticos.
 
-### 5.2 Geolocalización y Validación de Precisión (`src/services/LocationService.ts`)
+### 5.2 Geolocalización y Validación de Precisión (`src/evidence/LocationService.ts`)
 
 - **GPS de Alta Precisión:** Coordenadas obtenidas mediante `@react-native-community/geolocation` con `enableHighAccuracy: true` y límite de tiempo de 10 segundos.
-- **Fallback de Campus:** En armarios subterráneos o casetas metálicas donde la señal de satélite no penetra, el servicio provee coordenadas de referencia del sitio (campus FCyT Concepción del Uruguay: `-32.4825, -58.2321`) dejando constancia de la precisión estimada.
+- **Transparencia en Fix Satelital:** Cuando la señal de satélite no penetra (armarios metálicos o subterráneos), el servicio provee coordenadas de referencia del campus FCyT Concepción del Uruguay (`-32.4825, -58.2321`) con la bandera explícita `isEstimated: true` y precisión no falsificada, garantizando veracidad forense en el reporte técnico.
 
-### 5.3 Asistente de Instalación y Generador de Reportes PDF (`src/services/PdfReportService.ts`)
+### 5.3 Asistente de Instalación y Generador de Reportes PDF (`src/evidence/PdfReportService.ts`)
 
 El proceso de instalación consta de un asistente estructurado en 4 etapas:
 1. **Paso 1: Identificación:** Selección de sitio, equipo y escaneo QR opcional.
-2. **Paso 2: Evidencia de Campo:** Captura fotográfica guiada (Gabinete, Empalme Óptico, Nivel de Potencia) con coordenadas GPS asociadas a cada imagen.
-3. **Paso 3: Notas Técnicas:** Registro del técnico interviniente, atenuación de fibra (dBm), relación señal/ruido (SNR) y observaciones.
-4. **Paso 4: Revisión y Cierre:** Validación de datos, generación del archivo PDF y encolado atómico en la cola Outbox.
+2. **Paso 2: Evidencia de Campo:** Captura fotográfica local guiada (Gabinete, Empalme Óptico, Nivel de Potencia) con coordenadas GPS asociadas a cada imagen.
+3. **Paso 3: Notas Técnicas:** Asignación dinámica del técnico interviniente, atenuación de fibra (dBm), relación señal/ruido (SNR) y observaciones.
+4. **Paso 4: Revisión y Cierre:** Validación de datos, sanitización estricta de entradas HTML para prevención de inyecciones, generación del archivo PDF y encolado atómico en la cola Outbox.
 
 #### Especificaciones del Reporte PDF
 - Formato técnico de hoja blanca de alta densidad para ingeniería de telecomunicaciones.
@@ -303,9 +316,9 @@ El proceso de instalación consta de un asistente estructurado en 4 etapas:
 
 ---
 
-## 6. Motor de Descubrimiento en Red Local (`src/services/DiscoveryEngine.ts`)
+## 6. Motor de Descubrimiento en Red Local (`src/network/discovery/DiscoveryEngine.ts`)
 
-### 6.1 Matemática de Direccionamiento IPv4 (`src/services/SubnetUtils.ts`)
+### 6.1 Matemática de Direccionamiento IPv4 (`src/network/discovery/subnet.ts`)
 
 Para barrer la subred local sin invocar comandos de shell dependientes de la plataforma, el cálculo de rangos se efectúa mediante aritmética de 32 bits en TypeScript puro:
 
@@ -320,7 +333,7 @@ Las direcciones de host utilizables se generan en el intervalo $[\text{Red} + 1,
 El motor articula varias técnicas de descubrimiento en paralelo:
 - **Barrido Concurrente de Puertos TCP:** Conexión hacia puertos estándar de gestión de telecomunicaciones (`22` SSH, `23` Telnet, `80` HTTP, `443` HTTPS, `8291` MikroTik Winbox, `8080` Web alternativo) utilizando una ventana deslizante de 10 sockets simultáneos y un tiempo de espera de 600 ms.
 - **Sondeo SNMP Ping:** Envío de solicitudes `GetRequest` para `sysDescr.0` (`1.3.6.1.2.1.1.1.0`) sobre UDP 161. Los equipos que responden son clasificados de inmediato con su fabricante y nombre de sistema.
-- **Descubrimiento Zero-Configuration (mDNS):** Escucha de anuncios Bonjour / Avahi (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) mediante `react-native-zeroconf` para detectar equipos sin requerir barridos forzados de puertos.
+- **Descubrimiento Zero-Configuration (mDNS):** Escucha de anuncios Bonjour / Avahi (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) mediante `react-native-zeroconf` con limpieza rigurosa de escuchadores para prevenir fugas de memoria (`removeAllListeners()`).
 
 ---
 
@@ -352,11 +365,11 @@ El proyecto cuenta con un arnés completo de pruebas unitarias automatizadas con
 | Matemática de Subred y Direcciones IP | `__tests__/discovery.test.ts` | 7 | APROBADO |
 | Gestión de Credenciales y Presets SSH | `__tests__/credentials_ssh.test.ts` | 5 | APROBADO |
 | Esquema SQLite y Repositorios | `__tests__/store.test.ts` | 6 | APROBADO |
-| Fichas QR y Servicio de Geolocalización | `__tests__/evidence.test.ts` | 5 | APROBADO |
-| Asistente de Instalación y Generador PDF | `__tests__/installation.test.ts` | 5 | APROBADO |
-| Cola Outbox y Manejo de Conflictos | `__tests__/sync.test.ts` | 5 | APROBADO |
+| Fichas QR, Geolocalización y PDF | `__tests__/evidence.test.ts` | 7 | APROBADO |
+| Asistente de Instalación y Formulario | `__tests__/installation.test.ts` | 5 | APROBADO |
+| Cola Outbox y Manejo de Conflictos | `__tests__/sync.test.ts` | 6 | APROBADO |
 | Navegación de la App y Smoke de UI | `__tests__/App.test.tsx` | 1 | APROBADO |
-| **Cobertura Total del Sistema** | **8 Suites de Pruebas** | **44 Pruebas** | **100% APROBADO** |
+| **Cobertura Total del Sistema** | **8 Suites de Pruebas** | **47 Pruebas** | **100% APROBADO** |
 
 - **Verificación Estática de TypeScript:** `npx tsc --noEmit` finaliza con **0 errores**.
 - **Compilación Nativa Android:** `./gradlew assembleDebug` finaliza con éxito (`BUILD SUCCESSFUL`), generando el binario `app-debug.apk` con la Nueva Arquitectura habilitada.
