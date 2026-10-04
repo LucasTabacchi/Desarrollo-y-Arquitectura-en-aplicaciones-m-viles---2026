@@ -1,50 +1,50 @@
-# Network Diagnostics Suite — Technical Architecture & Implementation Report
+# Network Diagnostics Suite — Reporte Técnico de Arquitectura e Implementación
 
-**Licenciatura en Sistemas de Información** — FCyT, Sede Concepción del Uruguay  
-**Desarrollo de Aplicaciones Móviles — 2026**  
-**Project:** Network Diagnostics Suite (TP6)  
-**Package:** `com.fcyt.netdiag`  
-**Platform:** Android (Bare React Native 0.87.1, New Architecture Enabled)  
+**Licenciatura en Sistemas de Información** — Facultad de Ciencia y Tecnología (FCyT), Sede Concepción del Uruguay  
+**Cátedra:** Desarrollo de Aplicaciones Móviles — Ciclo Lectivo 2026  
+**Proyecto:** Network Diagnostics Suite (TP6)  
+**Paquete Android:** `com.fcyt.netdiag`  
+**Plataforma:** Android (Bare React Native 0.87.1, Nueva Arquitectura Habilitada)  
 
 ---
 
-## 1. Executive Summary & Architectural Overview
+## 1. Resumen Ejecutivo y Visión General de la Arquitectura
 
-The **Network Diagnostics Suite** is a mission-critical mobile toolkit designed for field telecommunications engineers installing and maintaining network infrastructure (fiber ONTs, wireless point-to-point links, managed switches, and core routers). Operating in challenging field environments (telecom towers, rooftops, server vaults, and remote substations) characterized by zero or intermittent cellular coverage, the system adopts a strict **offline-first, zero-trust, local-compute** architecture.
+La **Network Diagnostics Suite** es un conjunto de herramientas móviles diseñado para técnicos e ingenieros de telecomunicaciones encargados de la instalación y el mantenimiento de infraestructura de red (ONTs de fibra óptica, enlaces inalámbricos punto a punto, switches gestionables y routers de borde). Dado que los escenarios operativos de campo (torres de comunicaciones, azoteas, armarios en vía pública y salas de servidores) presentan conectividad móvil nula o intermitente, el sistema implementa una arquitectura rigurosamente **offline-first, de confianza cero y cómputo local**.
 
-### 1.1 Layered & Hexagonal Architecture
+### 1.1 Arquitectura en Capas y Hexagonal
 
-The application is structured into decoupled layers, strictly separating presentation components, domain logic, protocol drivers, and persistent storage:
+La aplicación adopta una estructura de capas desacopladas, aislando los componentes de presentación, la lógica de dominio, los controladores de protocolos de bajo nivel y la persistencia local:
 
 ```mermaid
 graph TD
-    subgraph UI ["Presentation Layer (React Native UI)"]
-        Nav["5-Tab Navigation (Inicio, Red, Instala., Historial, Ajustes)"]
-        Screens["Screens (Network, DeviceDetail, SSH, Wizard, SyncQueue)"]
-        UI_Kit["Atomic UI Kit (StatusHeader, Cards, ActionButtons, Badges)"]
+    subgraph UI ["Capa de Presentación (UI React Native)"]
+        Nav["Navegación de 5 Pestañas (Inicio, Red, Instala., Historial, Ajustes)"]
+        Screens["Pantallas (Red, DetalleEquipo, ConsolaSSH, Asistente, ColaSync)"]
+        UI_Kit["Kit de Componentes UI (StatusHeader, Cards, ActionButtons, Badges)"]
     end
 
-    subgraph Domain ["Domain & Services Layer"]
-        SNMP_Engine["SNMP v1/v2c PDU Engine & BER Codec"]
-        SSH_Service["SSH Command Service & Vendor Presets"]
-        Discovery_Engine["Discovery Engine (Subnet, Port Sweep, mDNS)"]
-        Location_Service["Location Service (GPS + Precision Filtering)"]
-        Report_Engine["PDF Report Generation Engine (HTML template)"]
-        Sync_Worker["Outbox Sync Worker & Exponential Backoff"]
+    subgraph Domain ["Capa de Dominio y Servicios"]
+        SNMP_Engine["Motor de PDUs SNMP v1/v2c y Códec BER"]
+        SSH_Service["Servicio de Comandos SSH y Presets por Fabricante"]
+        Discovery_Engine["Motor de Descubrimiento (Subred, Barrido de Puertos, mDNS)"]
+        Location_Service["Servicio de Ubicación (GPS y Filtrado de Precisión)"]
+        Report_Engine["Motor de Generación de Reportes PDF (Plantilla HTML)"]
+        Sync_Worker["Trabajador de Sincronización Outbox y Backoff Exponencial"]
     end
 
-    subgraph Storage ["Storage & Security Layer"]
-        SQLite_DB["Local Relational DB (op-sqlite)"]
+    subgraph Storage ["Capa de Almacenamiento y Seguridad"]
+        SQLite_DB["Base de Datos Relacional Local (op-sqlite)"]
         Keystore["Android Hardware Keystore (react-native-keychain)"]
-        Cache["Device Sheet Spec Cache"]
+        Cache["Caché de Fichas Técnicas de Equipos"]
     end
 
-    subgraph Native ["Native Bridges & Sockets"]
-        RN_UDP["Raw UDP Sockets (react-native-udp / UDP 161)"]
-        RN_TCP["Raw TCP Sockets (react-native-tcp-socket)"]
+    subgraph Native ["Puentes Nativos y Sockets de Red"]
+        RN_UDP["Sockets UDP Crudos (react-native-udp / Puerto 161)"]
+        RN_TCP["Sockets TCP Crudos (react-native-tcp-socket)"]
         RN_Zeroconf["mDNS / Bonjour (react-native-zeroconf)"]
-        RN_Camera["VisionCamera v5 + MLKit QR Scanner"]
-        RN_NetInfo["Connectivity State (@react-native-community/netinfo)"]
+        RN_Camera["VisionCamera v5 + Escáner de Códigos MLKit"]
+        RN_NetInfo["Estado de Conectividad (@react-native-community/netinfo)"]
     end
 
     UI --> Domain
@@ -54,103 +54,103 @@ graph TD
 
 ---
 
-## 2. Low-Level Network Protocol Layer: Custom SNMP Client
+## 2. Capa de Protocolos de Red de Bajo Nivel: Cliente SNMP Propio
 
-Standard mobile networking abstractions rely on HTTP/REST, leaving raw binary protocols unsupported in conventional frameworks. To interact with telecom gear over UDP port 161 without external C++ or Java runtime dependencies, we implemented a **pure TypeScript ASN.1 / BER (Basic Encoding Rules) codec and SNMP v1/v2c PDU parser**.
+Las abstracciones habituales de red en aplicaciones móviles se circunscriben al protocolo HTTP/REST, careciendo de soporte directo para protocolos binarios de bajo nivel. Para comunicarse con equipamiento de red sobre el puerto UDP 161 sin depender de librerías nativas externas en C++ o Java, se diseñó e implementó un **códec ASN.1 / BER (Basic Encoding Rules) y un analizador sintáctico de PDUs SNMP v1/v2c en TypeScript puro**.
 
-### 2.1 ASN.1 BER Codec (`src/protocols/snmp/BerCodec.ts`)
+### 2.1 Códec ASN.1 BER (`src/protocols/snmp/BerCodec.ts`)
 
-Basic Encoding Rules use a Type-Length-Value (TLV) structure:
-1. **Identifier (Tag):** Defines the data type, class (Universal, Application, Context-specific), and form (Primitive vs. Constructed).
-2. **Length:** Encoded in short form (1 byte for lengths $\le 127$) or long form (initial byte $0x80 | N$ followed by $N$ length bytes).
-3. **Value:** Raw binary representation of the type.
+Las reglas básicas de codificación (BER) operan bajo una estructura Tipo-Longitud-Valor (TLV):
+1. **Identificador (Tag):** Define el tipo de dato, la clase (Universal, Application, Context-specific) y la forma (Primitivo vs. Construido).
+2. **Longitud (Length):** Codificada en forma corta (1 byte para longitudes $\le 127$) o en forma extendida (byte inicial $0x80 | N$ seguido de los $N$ bytes de longitud).
+3. **Valor (Value):** Representación binaria del dato según su tipo.
 
-Supported ASN.1 / SNMP types implemented:
+Tipos ASN.1 / SNMP soportados e implementados:
 
-| Tag (Hex) | ASN.1 / SNMP Type | Form | Description |
+| Tag (Hex) | Tipo ASN.1 / SNMP | Forma | Descripción |
 |---|---|---|---|
-| `0x02` | `INTEGER` | Primitive | Signed big-endian integer with sign-bit padding |
-| `0x04` | `OCTET STRING` | Primitive | Raw byte sequences or UTF-8 ASCII strings |
-| `0x05` | `NULL` | Primitive | Empty value used in GetRequest variable bindings |
-| `0x06` | `OBJECT IDENTIFIER (OID)` | Primitive | Base-128 variable-length sub-identifier encoding |
-| `0x30` | `SEQUENCE` | Constructed | Ordered collection of TLV fields |
-| `0x40` | `IpAddress` | Application | 4-byte raw IPv4 address |
-| `0x41` | `Counter32` | Application | 32-bit unsigned rollover counter (interface bytes) |
-| `0x42` | `Gauge32` | Application | 32-bit unsigned non-rollover metric (bandwidth, CPU) |
-| `0x43` | `TimeTicks` | Application | Hundredths of a second since device epoch |
-| `0x46` | `Counter64` | Application | 64-bit high-speed interface counter |
-| `0xA0` | `GetRequest-PDU` | Context/Constructed | Command to retrieve MIB OIDs |
-| `0xA2` | `GetResponse-PDU` | Context/Constructed | Device response payload with variable bindings |
+| `0x02` | `INTEGER` | Primitivo | Entero con signo en formato big-endian con relleno de bit de signo |
+| `0x04` | `OCTET STRING` | Primitivo | Secuencia de bytes arbitrarios o cadena ASCII/UTF-8 |
+| `0x05` | `NULL` | Primitivo | Valor nulo utilizado en las variables de solicitud GetRequest |
+| `0x06` | `OBJECT IDENTIFIER (OID)` | Primitivo | Identificador de objeto codificado en base-128 de longitud variable |
+| `0x30` | `SEQUENCE` | Construido | Lista ordenada de elementos TLV |
+| `0x40` | `IpAddress` | Aplicación | Dirección IPv4 en 4 bytes binarios directos |
+| `0x41` | `Counter32` | Aplicación | Contador incremental de 32 bits sin signo con rollover (tráfico) |
+| `0x42` | `Gauge32` | Aplicación | Métrica de 32 bits sin signo no acumulativa (ancho de banda, CPU) |
+| `0x43` | `TimeTicks` | Aplicación | Centésimas de segundo transcurridas desde el inicio del equipo |
+| `0x46` | `Counter64` | Aplicación | Contador de alta velocidad de 64 bits para interfaces gigabit/fibra |
+| `0xA0` | `GetRequest-PDU` | Contexto/Construido | PDU de solicitud de consulta de OIDs |
+| `0xA2` | `GetResponse-PDU` | Contexto/Construido | PDU de respuesta del dispositivo con variables resueltas |
 
-#### OID Base-128 Encoding Implementation
-The first two sub-identifiers $X$ and $Y$ of an OID (e.g., `1.3` for `iso.org`) are condensed into the first byte as $(X \times 40) + Y = 43$ (`0x2B`). Subsequent numbers $\ge 128$ are encoded using variable-length 7-bit chunks with the high bit set ($0x80$) on all bytes except the terminal byte:
+#### Codificación Base-128 de Identificadores de Objetos (OID)
+Los primeros dos subidentificadores $X$ e $Y$ del OID (por ejemplo, `1.3` para `iso.org`) se compactan en el primer byte según la fórmula $(X \times 40) + Y = 43$ (`0x2B`). Los subidentificadores posteriores con valores $\ge 128$ se dividen en fragmentos de 7 bits con el bit más significativo encendido ($0x80$) en todos los bytes excepto en el byte de terminación:
 
-$$\text{Value} = \sum_{i=0}^{k-1} (B_i \ \& \ 0x7F) \cdot 128^{(k-1-i)}$$
+$$\text{Valor} = \sum_{i=0}^{k-1} (B_i \ \& \ 0x7F) \cdot 128^{(k-1-i)}$$
 
-### 2.2 SNMP Message Structure & PDU Construction (`src/protocols/snmp/SnmpClient.ts`)
+### 2.2 Estructura del Mensaje SNMP y Construcción de PDUs (`src/protocols/snmp/SnmpClient.ts`)
 
-A complete SNMPv2c message envelope follows this structure:
+La trama de un mensaje SNMPv2c respeta la siguiente jerarquía:
 
 ```
-SEQUENCE (Message) {
-    INTEGER (version: 0 for v1, 1 for v2c)
-    OCTET STRING (community: e.g. "public")
+SEQUENCE (Mensaje) {
+    INTEGER (versión: 0 para v1, 1 para v2c)
+    OCTET STRING (comunidad: e.g. "public")
     GetRequest-PDU [0] {
-        INTEGER (request-id)
+        INTEGER (request-id: identificador único aleatorio)
         INTEGER (error-status: 0)
         INTEGER (error-index: 0)
-        SEQUENCE (VarBindList) {
+        SEQUENCE (VarBindList: lista de variables) {
             SEQUENCE (VarBind) {
-                OBJECT IDENTIFIER (requested-oid)
-                NULL (null-value: 0x05 0x00)
+                OBJECT IDENTIFIER (oid-solicitado)
+                NULL (valor-nulo: 0x05 0x00)
             }
         }
     }
 }
 ```
 
-### 2.3 Supported MIB-II Standard OIDs
+### 2.3 OIDs Estándar de la MIB-II Soportados
 
-| Metric | OID | MIB Name | Type |
+| Métrica | OID | Nombre MIB | Tipo de Dato |
 |---|---|---|---|
-| System Description | `1.3.6.1.2.1.1.1.0` | `sysDescr` | `OCTET STRING` |
-| System Object ID | `1.3.6.1.2.1.1.2.0` | `sysObjectID` | `OID` |
-| System Uptime | `1.3.6.1.2.1.1.3.0` | `sysUpTime` | `TimeTicks` (formatted as days, hours, mins) |
-| System Name | `1.3.6.1.2.1.1.5.0` | `sysName` | `OCTET STRING` |
-| System Location | `1.3.6.1.2.1.1.6.0` | `sysLocation` | `OCTET STRING` |
-| Inbound Traffic (eth0) | `1.3.6.1.2.1.2.2.1.10.1` | `ifInOctets.1` | `Counter32` / `Counter64` |
-| Outbound Traffic (eth0)| `1.3.6.1.2.1.2.2.1.16.1` | `ifOutOctets.1` | `Counter32` / `Counter64` |
-| Interface Status | `1.3.6.1.2.1.2.2.1.8.1` | `ifOperStatus.1` | `INTEGER` (1: Up, 2: Down) |
-| MAC Address | `1.3.6.1.2.1.2.2.1.6.1` | `ifPhysAddress.1` | `OCTET STRING` (hex-formatted MAC) |
+| Descripción del Sistema | `1.3.6.1.2.1.1.1.0` | `sysDescr` | `OCTET STRING` |
+| OID del Sistema | `1.3.6.1.2.1.1.2.0` | `sysObjectID` | `OID` |
+| Tiempo de Actividad | `1.3.6.1.2.1.1.3.0` | `sysUpTime` | `TimeTicks` (días, horas, minutos) |
+| Nombre del Equipo | `1.3.6.1.2.1.1.5.0` | `sysName` | `OCTET STRING` |
+| Ubicación Física | `1.3.6.1.2.1.1.6.0` | `sysLocation` | `OCTET STRING` |
+| Tráfico Entrante (eth0) | `1.3.6.1.2.1.2.2.1.10.1` | `ifInOctets.1` | `Counter32` / `Counter64` |
+| Tráfico Saliente (eth0) | `1.3.6.1.2.1.2.2.1.16.1` | `ifOutOctets.1` | `Counter32` / `Counter64` |
+| Estado Operativo Interfaz | `1.3.6.1.2.1.2.2.1.8.1` | `ifOperStatus.1` | `INTEGER` (1: Up, 2: Down) |
+| Dirección MAC Física | `1.3.6.1.2.1.2.2.1.6.1` | `ifPhysAddress.1` | `OCTET STRING` (formato hexadecimal) |
 
-### 2.4 Security Analysis & Protocol Scope
+### 2.4 Análisis de Seguridad y Alcance del Protocolo
 
-- **Community Strings in Cleartext:** SNMP v1 and v2c send community strings in plain text over UDP. In production field environments, technicians are advised to execute queries over isolated management VLANs or dedicated service ports.
-- **UDP Spoofing & Replay:** UDP port 161 has no native handshake. Our client generates cryptographically pseudo-random 32-bit `request-id`s and validates incoming `GetResponse` identifiers to prevent replay ingestion.
-- **SNMPv3 Limitations:** SNMPv3 adds USM (User-based Security Model) authentication (HMAC-SHA/MD5) and CBC-DES/AES encryption, which require substantial cryptographic handshakes. Given the assignment scope and standard field router access, SNMP v1/v2c was prioritized and hardened.
+- **Comunidades en Texto Claro:** SNMP v1 y v2c transmiten la cadena de comunidad en texto plano sin cifrado. En entornos de campo, se recomienda realizar las consultas a través de VLANs de administración aisladas o puertos de servicio directos.
+- **Suplantación y Replay UDP:** El protocolo UDP no posee un canal con estado. El cliente genera valores de `request-id` pseudoaleatorios criptográficos de 32 bits y valida que el paquete `GetResponse` coincida de manera estricta con la solicitud enviada.
+- **Alcance frente a SNMPv3:** SNMPv3 introduce autenticación USM y cifrado CBC-DES/AES. Dado el alcance de este trabajo práctico y los requisitos de conectividad de routers de acceso en campo, se priorizó la estabilidad, robustez y optimización de un cliente SNMP v1/v2c liviano en TypeScript.
 
 ---
 
-## 3. Security Architecture & Credential Management
+## 3. Arquitectura de Seguridad y Gestión de Credenciales
 
-Field technicians handle sensitive credentials across multiple vendors (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS). Exposing passwords or private keys in application databases, memory dumps, or log files constitutes an unacceptable security vulnerability.
+Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS). La persistencia de contraseñas o claves privadas en archivos de base de datos o volcados de memoria representaría un riesgo crítico de seguridad.
 
-### 3.1 Hardware-Backed Keystore Integration (`src/security/CredentialManager.ts`)
+### 3.1 Integración con Hardware Keystore (`src/security/CredentialManager.ts`)
 
-- **Storage Isolation:** Passwords and private keys are **never stored in SQLite**. They are stored exclusively in the **Android Keystore system** via `react-native-keychain` using hardware-backed AES-256-GCM encryption with device-bound keys.
-- **Reference-Based Database Design:** The SQLite `credentials` table holds only non-sensitive descriptive metadata:
-  - `id`: Unique UUIDv4 reference identifier.
-  - `name`: Human-readable label (e.g., "Nodo Centro - Admin").
-  - `vendor`: Router vendor enum (`mikrotik`, `cisco`, `huawei`, `ubiquiti`, `generic`).
-  - `username`: SSH username.
-  - `keychain_ref`: Hardware keystore key lookup pointer (`netdiag_cred_<id>`).
-  - `port`: Default SSH port (22, 2222, etc.).
-- **Ephemeral In-Memory De-referencing:** The plaintext secret is retrieved from the hardware enclave only at the exact moment of SSH socket initialization and immediately released from scope once the session is established.
-- **Zero Secrets in Outbox Payloads:** The sync outbox strictly sanitizes entity dumps, ensuring credentials and cryptographic material are never serialized for backend replication.
+- **Aislamiento Criptográfico:** Las contraseñas y claves privadas **nunca se guardan en SQLite ni en texto plano**. Se resguardan exclusivamente en el **Android Keystore System** a través de `react-native-keychain`, utilizando cifrado AES-256-GCM respaldado por hardware del dispositivo.
+- **Patrón de Referencia Opaca en SQLite:** La tabla `credentials` de la base de datos local almacena únicamente metadatos descriptivos:
+  - `id`: Identificador UUIDv4 único.
+  - `name`: Nombre descriptivo (ej: "Nodo Centro - Admin").
+  - `vendor`: Identificador del fabricante (`mikrotik`, `cisco`, `huawei`, `ubiquiti`, `generic`).
+  - `username`: Nombre de usuario SSH.
+  - `keychain_ref`: Puntero de referencia al Keystore (`netdiag_cred_<id>`).
+  - `port`: Puerto SSH configurado (22, 2222, etc.).
+- **Desreferenciación Efímera en Memoria:** El secreto en texto claro solo se extrae del enclave seguro en el instante exacto de abrir la sesión SSH y se libera de memoria una vez autenticada la conexión.
+- **Saneamiento de la Cola Outbox:** Los paquetes de datos preparados para sincronización hacia el backend no incluyen credenciales ni material criptográfico sensible.
 
-### 3.2 SSH Command Execution Engine (`src/protocols/ssh/SshService.ts`)
+### 3.2 Servicio de Comandos SSH (`src/protocols/ssh/SshService.ts`)
 
-The SSH service includes predefined vendor command templates with timeout management:
+El servicio SSH provee plantillas de comandos optimizadas por fabricante:
 
 ```typescript
 export const VENDOR_PRESETS: Record<DeviceVendor, SshPresetCommand[]> = {
@@ -183,13 +183,13 @@ export const VENDOR_PRESETS: Record<DeviceVendor, SshPresetCommand[]> = {
 
 ---
 
-## 4. Offline-First Architecture & Outbox Synchronization
+## 4. Arquitectura Offline-First y Sincronización Outbox
 
-Field installations require guaranteed data persistence regardless of network state. The system implements a robust **Outbox Pattern** backed by local SQLite persistence and automatic background synchronization.
+Las intervenciones en campo exigen persistencia local inmediata y garantizada. El sistema implementa el **patrón Outbox** sobre SQLite con un trabajador de sincronización en segundo plano.
 
-### 4.1 SQLite Schema & Outbox Lifecycle (`src/store/schema.ts`)
+### 4.1 Esquema SQLite y Ciclo de Vida del Outbox (`src/store/schema.ts`)
 
-The `outbox` table tracks every pending write mutation with rigorous state transition tracking:
+La tabla `outbox` modela la máquina de estados de las mutaciones pendientes de envío:
 
 ```sql
 CREATE TABLE IF NOT EXISTS outbox (
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS outbox (
     entity_type TEXT NOT NULL,       -- 'diagnostic' | 'installation' | 'device'
     entity_id TEXT NOT NULL,
     action TEXT NOT NULL,            -- 'create' | 'update' | 'delete'
-    payload TEXT NOT NULL,           -- JSON serialized entity payload
+    payload TEXT NOT NULL,           -- Payload serializado en JSON
     status TEXT NOT NULL,            -- 'pending' | 'syncing' | 'synced' | 'failed' | 'conflict'
     attempts INTEGER DEFAULT 0,
     max_attempts INTEGER DEFAULT 5,
@@ -208,57 +208,57 @@ CREATE TABLE IF NOT EXISTS outbox (
 );
 ```
 
-### 4.2 Exponential Backoff Algorithm (`src/sync/SyncWorker.ts`)
+### 4.2 Algoritmo de Backoff Exponencial con Jitter (`src/sync/SyncWorker.ts`)
 
-When backend synchronization requests fail due to network timeouts, server unreachable states, or transient connection drops, the worker implements truncated exponential backoff with random jitter to prevent "thundering herd" bottlenecks:
+Cuando los envíos fallan por pérdida de conectividad o indisponibilidad del servidor, el trabajador aplica un cálculo de reintento exponencial truncado con fluctuación aleatoria (jitter):
 
-$$t_{\text{retry}} = t_{\text{now}} + \min\left(t_{\text{cap}}, \ t_{\text{base}} \times 2^{\text{attempts}} + \text{jitter}\right)$$
+$$t_{\text{reintento}} = t_{\text{actual}} + \min\left(t_{\text{tope}}, \ t_{\text{base}} \times 2^{\text{intentos}} + \text{jitter}\right)$$
 
-Where:
-- $t_{\text{base}} = 2\text{ seconds}$
-- $t_{\text{cap}} = 300\text{ seconds (5 minutes)}$
+Valores de configuración:
+- $t_{\text{base}} = 2\text{ segundos}$
+- $t_{\text{tope}} = 300\text{ segundos (5 minutos)}$
 - $\text{jitter} \in [0, 1000\text{ ms}]$
 
-### 4.3 Automatic Synchronization Trigger (NetInfo Listener)
+### 4.3 Disparo Automático por Conectividad (NetInfo Listener)
 
-The `SyncWorker` subscribes to `@react-native-community/netinfo`. Upon transition from `isConnected: false` to `isConnected: true` (or `isInternetReachable: true`), the outbox worker immediately awakens, loads all items where `status IN ('pending', 'failed')` and `next_retry_at <= now()`, and executes batch push synchronization.
+`SyncWorker` se suscribe a los eventos de `@react-native-community/netinfo`. Al pasar de un estado sin red a `isConnected: true` (o `isInternetReachable: true`), el trabajador despierta automáticamente, selecciona los elementos con `status IN ('pending', 'failed')` cuya marca `next_retry_at <= now()`, y efectúa la sincronización por lotes contra el endpoint `POST /sync/push`.
 
-### 4.4 Conflict Resolution Protocol (HTTP 409 Dual-Version Reconciliation)
+### 4.4 Protocolo de Resolución de Conflictos (HTTP 409)
 
-When the backend identifies that an incoming entity version was modified concurrently on the central server, it rejects the mutation with HTTP `409 Conflict`, returning the `server_version` in the response body.
-1. The outbox item transitions to `status = 'conflict'`.
-2. The conflict payload is stored in the local `ConflictStore`.
-3. The UI alerts the user with a warning badge and directs them to the **Sync Conflict Screen** (`SyncConflictScreen.tsx`).
-4. The technician performs a visual side-by-side comparison:
-   - **"Mantener mía" (Keep Local):** Overwrites server with technician's field evidence and force-pushes with updated version counter.
-   - **"Usar servidor" (Use Server):** Discards local conflict and updates local SQLite repository with authoritative server state.
+Si el servidor central detecta que la entidad fue modificada concurrentemente, responde con código HTTP `409 Conflict` incluyendo la propiedad `server_version`.
+1. El elemento en la cola pasa a `status = 'conflict'`.
+2. El detalle del conflicto se almacena en el `ConflictStore` local.
+3. La interfaz visual alerta al técnico y habilita la pantalla de resolución (`SyncConflictScreen.tsx`).
+4. El técnico compara las diferencias lado a lado:
+   - **"Mantener mía" (Keep Local):** Sobrescribe el servidor forzando el envío con versión incrementada.
+   - **"Usar servidor" (Use Server):** Descarta el registro local en conflicto y adopta la versión oficial del backend.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Technician as Field Technician
-    participant App as Mobile App (SyncWorker)
-    participant Outbox as SQLite (Outbox)
-    participant Backend as Backend Sync Stub
+    actor Tecnico as Técnico de Campo
+    participant App as App Móvil (SyncWorker)
+    participant Outbox as SQLite (Tabla outbox)
+    participant Backend as Backend de Sincronización
 
-    Technician->>App: Completes Installation Report (Offline)
+    Tecnico->>App: Completa Reporte de Instalación (Sin Conexión)
     App->>Outbox: INSERT INTO outbox (status='pending')
-    Note over App,Outbox: App detects no active internet connection
+    Note over App,Outbox: La app registra que no hay acceso a internet
 
-    NetInfo-->>App: Network Restored (WiFi / 4G)
+    NetInfo-->>App: Red Restablecida (WiFi / 4G)
     App->>Outbox: SELECT * FROM outbox WHERE status IN ('pending', 'failed')
-    App->>Backend: POST /sync/push (batch payload)
+    App->>Backend: POST /sync/push (lote de elementos)
     
-    alt 200 OK (Clean Sync)
+    alt Respuesta 200 OK (Sincronización Exitosa)
         Backend-->>App: { status: 'ok', synced_ids: [...] }
         App->>Outbox: UPDATE outbox SET status='synced'
-    else 409 Conflict (Concurrent Modification)
+    else Respuesta 409 Conflict (Modificación Concurrente)
         Backend-->>App: { status: 'conflict', server_version: {...} }
         App->>Outbox: UPDATE outbox SET status='conflict'
-        App->>Technician: Display Conflict Notification Banner
-        Technician->>App: Opens SyncConflictScreen
-        Technician->>App: Chooses "Mantener mía" or "Usar servidor"
-        App->>Backend: POST /sync/push (Resolved Payload)
+        App->>Tecnico: Muestra Notificación de Conflicto en Pantalla
+        Tecnico->>App: Abre SyncConflictScreen
+        Tecnico->>App: Elige "Mantener mía" o "Usar servidor"
+        App->>Backend: POST /sync/push (Versión Resuelta)
         Backend-->>App: 200 OK
         App->>Outbox: UPDATE outbox SET status='synced'
     end
@@ -266,93 +266,97 @@ sequenceDiagram
 
 ---
 
-## 5. Equipment Identification & Field Evidence Engine
+## 5. Identificación de Equipos y Motor de Evidencia de Campo
 
-### 5.1 QR & Barcode Detection (`src/services/DeviceSheetCache.ts` & `QrScannerScreen.tsx`)
+### 5.1 Escaneo de Códigos QR y de Barras (`src/services/DeviceSheetCache.ts` y `QrScannerScreen.tsx`)
 
-Telecom devices are labeled with QR codes or Code128 barcodes containing equipment serial numbers, MAC addresses, or inventory URLs.
-- **Real-Time Camera Capture:** Integrated with `react-native-vision-camera` (v5) and high-speed MLKit frame processing.
-- **Multi-Format Barcode Parser:** Capable of extracting device identification from:
-  - JSON structures: `{"serial": "HUAW123456", "model": "EchoLife HG8245H", ...}`
-  - Telecom Inventory URLs: `https://telecom.net/dev?id=HUAW123456&model=HG8245H`
-  - Raw MAC addresses: `E0:69:95:A1:B2:C3` or `E06995A1B2C3`
-  - Raw Serial Numbers: `SN-1234567890`
-- **Offline Spec Catalog:** When operating without internet access, parsed device models are mapped to an embedded offline specification cache containing factory defaults, port configurations, and optical sensitivity thresholds.
+Los equipos de telecomunicaciones presentan etiquetas con números de serie, direcciones MAC o enlaces de aprovisionamiento en formato QR o Code128.
+- **Captura en Tiempo Real:** Integración con `react-native-vision-camera` (v5) y frame processor de MLKit.
+- **Analizador Multiformato:** Extrae la identificación de equipos a partir de:
+  - Estructuras JSON: `{"serial": "HUAW123456", "model": "EchoLife HG8245H", ...}`
+  - URLs de inventario: `https://telecom.net/dev?id=HUAW123456&model=HG8245H`
+  - Direcciones MAC directas: `E0:69:95:A1:B2:C3` o `E06995A1B2C3`
+  - Números de serie estándar: `SN-1234567890`
+- **Catálogo Técnico Fuera de Línea:** Sin conexión a internet, los modelos reconocidos se vinculan de inmediato a una base local con especificaciones de puertos, frecuencias y umbrales ópticos.
 
-### 5.2 Geolocation & Accuracy Filtering (`src/services/LocationService.ts`)
+### 5.2 Geolocalización y Validación de Precisión (`src/services/LocationService.ts`)
 
-- **High-Accuracy GPS:** Coordinates are requested via `@react-native-community/geolocation` with `enableHighAccuracy: true` and a 10-second timeout.
-- **Campus / Field Fallback:** In indoor basements or metal-clad server huts where GPS signal acquisition times out, the service gracefully falls back to configured site coordinates (e.g., FCyT Concepción del Uruguay campus: `-32.4825, -58.2321`) and flags the accuracy level accordingly.
+- **GPS de Alta Precisión:** Coordenadas obtenidas mediante `@react-native-community/geolocation` con `enableHighAccuracy: true` y límite de tiempo de 10 segundos.
+- **Fallback de Campus:** En armarios subterráneos o casetas metálicas donde la señal de satélite no penetra, el servicio provee coordenadas de referencia del sitio (campus FCyT Concepción del Uruguay: `-32.4825, -58.2321`) dejando constancia de la precisión estimada.
 
-### 5.3 Technical Installation Wizard & PDF Report Generator (`src/services/PdfReportService.ts`)
+### 5.3 Asistente de Instalación y Generador de Reportes PDF (`src/services/PdfReportService.ts`)
 
-The installation workflow guides the technician through 4 structured steps:
-1. **Paso 1: Identificación:** Site selection, device selection, and optional QR scanner launch.
-2. **Paso 2: Evidencia de Campo:** Photo capture (Cabinet, Fiber Splice, Optical Level) with real-time GPS metadata binding.
-3. **Paso 3: Notas Técnicas:** Structured fields for Technician Name, Fiber Loss (dBm), Signal-to-Noise Ratio (SNR), and technical observations.
-4. **Paso 4: Revisión y Cierre:** Summary review, automatic PDF generation, and atomic outbox enqueuing.
+El proceso de instalación consta de un asistente estructurado en 4 etapas:
+1. **Paso 1: Identificación:** Selección de sitio, equipo y escaneo QR opcional.
+2. **Paso 2: Evidencia de Campo:** Captura fotográfica guiada (Gabinete, Empalme Óptico, Nivel de Potencia) con coordenadas GPS asociadas a cada imagen.
+3. **Paso 3: Notas Técnicas:** Registro del técnico interviniente, atenuación de fibra (dBm), relación señal/ruido (SNR) y observaciones.
+4. **Paso 4: Revisión y Cierre:** Validación de datos, generación del archivo PDF y encolado atómico en la cola Outbox.
 
-#### Generated PDF Specifications
-- Formatted as a high-density, professional white-sheet engineering document.
-- Contains header branding, document verification UUID, timestamp, site metadata, device hardware specs, optical telemetry badges, two-column labeled photo evidence grid with GPS geostamps, and technician sign-off signature box.
-- Exported via `react-native-html-to-pdf` and previewable offline via `PdfPreviewScreen.tsx`.
-
----
-
-## 6. Local Network Discovery Engine (`src/services/DiscoveryEngine.ts`)
-
-### 6.1 Subnet Address Space Mathematics (`src/services/SubnetUtils.ts`)
-
-To probe the local network without relying on non-portable shell binaries, the suite computes IPv4 subnet ranges directly in pure TypeScript:
-
-$$\text{Network Integer} = \text{IP Integer} \ \& \ \text{Mask Integer}$$
-
-$$\text{Broadcast Integer} = \text{Network Integer} \ | \ (\sim\text{Mask Integer} \ \& \ \text{0xFFFFFFFF})$$
-
-Usable host addresses are dynamically generated in the range $[\text{Network} + 1, \ \text{Broadcast} - 1]$, constrained to a maximum of 254 hosts (`/24`) to preserve mobile battery and prevent socket starvation.
-
-### 6.2 Concurrent Port & Service Probing
-
-The discovery engine coordinates multiple discovery protocols concurrently:
-- **Throttled TCP Port Sweep:** Connects to standard telecom management ports (`22` SSH, `23` Telnet, `80` HTTP, `443` HTTPS, `8291` MikroTik Winbox, `8080` Alt-Web) using a sliding concurrency window of 10 parallel sockets with a 600ms connection timeout.
-- **SNMP Ping Sweep:** Sends a lightweight `GetRequest` for `sysDescr.0` (`1.3.6.1.2.1.1.1.0`) over UDP 161. Responding hosts are immediately cataloged with device vendor and hostname.
-- **Zero-Configuration Networking (mDNS):** Listens for Apple Bonjour / Avahi advertisements (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) via `react-native-zeroconf` to discover unmanaged switches, printers, and IoT gateways without port scanning.
+#### Especificaciones del Reporte PDF
+- Formato técnico de hoja blanca de alta densidad para ingeniería de telecomunicaciones.
+- Cabecera formal con identificación del sitio, fecha, hora y UUID de verificación.
+- Tabla detallada de especificaciones del hardware instalado.
+- Indicadores de telemetría óptica (Potencia Rx en dBm y SNR en dB).
+- Matriz fotográfica de evidencia a dos columnas con marcas de coordenadas GPS y fecha impresas sobre cada imagen.
+- Cuadro formal para firma y sello de conformidad técnica.
+- Exportado mediante `react-native-html-to-pdf` y visible sin conexión en `PdfPreviewScreen.tsx`.
 
 ---
 
-## 7. Android Native Specifics & Permissions
+## 6. Motor de Descubrimiento en Red Local (`src/services/DiscoveryEngine.ts`)
 
-### 7.1 Android 10+ ARP Table Restriction Mitigation
+### 6.1 Matemática de Direccionamiento IPv4 (`src/services/SubnetUtils.ts`)
 
-Since Android 10 (API Level 29), Google blocked access to `/proc/net/arp` and restricted `getifaddrs()` MAC address lookups for privacy reasons, returning dummy values like `02:00:00:00:00:00`.
-- **Architectural Solution:** Instead of relying on low-level kernel ARP tables, the suite queries the **SNMP MIB-II `ifPhysAddress.1` (`1.3.6.1.2.1.2.2.1.6.1`)** table over the local network interface. Managed network devices directly return their authentic hardware MAC address via standard telemetry.
+Para barrer la subred local sin invocar comandos de shell dependientes de la plataforma, el cálculo de rangos se efectúa mediante aritmética de 32 bits en TypeScript puro:
 
-### 7.2 Manifest Permissions & Multicast Socket Configuration
+$$\text{Entero de Red} = \text{Entero IP} \ \& \ \text{Entero Máscara}$$
 
-Configured in `android/app/src/main/AndroidManifest.xml`:
-- `INTERNET` and `ACCESS_NETWORK_STATE`: Sockets and connectivity monitoring.
-- `ACCESS_WIFI_STATE` and `CHANGE_WIFI_MULTICAST_STATE`: Required for mDNS/Zeroconf multicast group joining (`224.0.0.251`).
-- `CAMERA`: VisionCamera real-time barcode scanning and evidence photography.
-- `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION`: GPS georeferencing of field installation evidence.
-- `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`: PDF generation and export on legacy Android API levels.
+$$\text{Entero Broadcast} = \text{Entero Red} \ | \ (\sim\text{Entero Máscara} \ \& \ \text{0xFFFFFFFF})$$
+
+Las direcciones de host utilizables se generan en el intervalo $[\text{Red} + 1, \ \text{Broadcast} - 1]$, acotando la búsqueda a un máximo de 254 hosts (prefijo `/24`) para evitar saturación de sockets y consumo excesivo de batería en el dispositivo móvil.
+
+### 6.2 Sondeo Concurrente de Puertos y Servicios
+
+El motor articula varias técnicas de descubrimiento en paralelo:
+- **Barrido Concurrente de Puertos TCP:** Conexión hacia puertos estándar de gestión de telecomunicaciones (`22` SSH, `23` Telnet, `80` HTTP, `443` HTTPS, `8291` MikroTik Winbox, `8080` Web alternativo) utilizando una ventana deslizante de 10 sockets simultáneos y un tiempo de espera de 600 ms.
+- **Sondeo SNMP Ping:** Envío de solicitudes `GetRequest` para `sysDescr.0` (`1.3.6.1.2.1.1.1.0`) sobre UDP 161. Los equipos que responden son clasificados de inmediato con su fabricante y nombre de sistema.
+- **Descubrimiento Zero-Configuration (mDNS):** Escucha de anuncios Bonjour / Avahi (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) mediante `react-native-zeroconf` para detectar equipos sin requerir barridos forzados de puertos.
 
 ---
 
-## 8. Automated Testing & Verification Summary
+## 7. Particularidades Nativas de Android y Permisos
 
-The test harness incorporates Jest unit tests covering all core algorithmic modules:
+### 7.1 Mitigación de Restricciones de Lectura ARP en Android 10+
 
-| Test Suite | File | Tests | Status |
+A partir de Android 10 (Nivel de API 29), el sistema operativo bloquea la lectura del archivo del kernel `/proc/net/arp` y neutraliza las consultas de direcciones MAC vía `getifaddrs()`, devolviendo valores fijos `02:00:00:00:00:00` por políticas de privacidad.
+- **Solución Arquitectónica:** En lugar de intentar leer tablas ARP protegidas por el sistema operativo, la suite consulta la tabla MIB-II **`ifPhysAddress.1` (`1.3.6.1.2.1.2.2.1.6.1`)** mediante SNMP. Los routers, switches y ONTs gestionados entregan directamente su dirección MAC real de fábrica en la respuesta de telemetría.
+
+### 7.2 Permisos de Manifiesto y Configuración Multicast
+
+Configurados en `android/app/src/main/AndroidManifest.xml`:
+- `INTERNET` y `ACCESS_NETWORK_STATE`: Apertura de sockets y escucha del estado de red.
+- `ACCESS_WIFI_STATE` y `CHANGE_WIFI_MULTICAST_STATE`: Requeridos para que la radio Wi-Fi admita tráfico multicast de mDNS/Zeroconf en la dirección `224.0.0.251`.
+- `CAMERA`: Escáner de códigos de barras en tiempo real y captura fotográfica de evidencia.
+- `ACCESS_FINE_LOCATION` y `ACCESS_COARSE_LOCATION`: Georreferenciación GPS de evidencia en campo.
+- `READ_EXTERNAL_STORAGE` y `WRITE_EXTERNAL_STORAGE`: Generación y exportación de reportes PDF en niveles de API heredados.
+
+---
+
+## 8. Resumen de Pruebas Automatizadas y Verificación
+
+El proyecto cuenta con un arnés completo de pruebas unitarias automatizadas con Jest:
+
+| Suite de Pruebas | Archivo | Pruebas | Estado |
 |---|---|---|---|
-| SNMP BER Codec & PDU Parser | `__tests__/snmp.test.ts` | 10 | PASS |
-| Subnet Math & IP Calculation | `__tests__/discovery.test.ts` | 7 | PASS |
-| Credential & SSH Presets | `__tests__/credentials_ssh.test.ts` | 5 | PASS |
-| SQLite Schema & Repositories | `__tests__/store.test.ts` | 6 | PASS |
-| QR Code & Location Service | `__tests__/evidence.test.ts` | 5 | PASS |
-| Installation Wizard & PDF Builder | `__tests__/installation.test.ts` | 5 | PASS |
-| Outbox Worker & Conflict Handler | `__tests__/sync.test.ts` | 5 | PASS |
-| App Navigation & UI Smoke | `__tests__/App.test.tsx` | 1 | PASS |
-| **Total Test Coverage** | **8 Test Suites** | **44 Tests** | **100% PASS** |
+| Códec BER y Analizador PDU SNMP | `__tests__/snmp.test.ts` | 10 | APROBADO |
+| Matemática de Subred y Direcciones IP | `__tests__/discovery.test.ts` | 7 | APROBADO |
+| Gestión de Credenciales y Presets SSH | `__tests__/credentials_ssh.test.ts` | 5 | APROBADO |
+| Esquema SQLite y Repositorios | `__tests__/store.test.ts` | 6 | APROBADO |
+| Fichas QR y Servicio de Geolocalización | `__tests__/evidence.test.ts` | 5 | APROBADO |
+| Asistente de Instalación y Generador PDF | `__tests__/installation.test.ts` | 5 | APROBADO |
+| Cola Outbox y Manejo de Conflictos | `__tests__/sync.test.ts` | 5 | APROBADO |
+| Navegación de la App y Smoke de UI | `__tests__/App.test.tsx` | 1 | APROBADO |
+| **Cobertura Total del Sistema** | **8 Suites de Pruebas** | **44 Pruebas** | **100% APROBADO** |
 
-- **TypeScript Static Verification:** `npx tsc --noEmit` completes with **0 errors**.
-- **Android Native Compilation:** Gradle debug build succeeds generating `app-debug.apk` with New Architecture enabled.
+- **Verificación Estática de TypeScript:** `npx tsc --noEmit` finaliza con **0 errores**.
+- **Compilación Nativa Android:** `./gradlew assembleDebug` finaliza con éxito (`BUILD SUCCESSFUL`), generando el binario `app-debug.apk` con la Nueva Arquitectura habilitada.

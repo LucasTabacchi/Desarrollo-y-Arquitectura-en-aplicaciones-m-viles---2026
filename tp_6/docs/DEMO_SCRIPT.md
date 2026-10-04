@@ -1,195 +1,195 @@
-# Network Diagnostics Suite — Demonstration & Video Recording Script
+# Network Diagnostics Suite — Guion de Demostración y Grabación de Video
 
-**Licenciatura en Sistemas de Información** — FCyT, Sede Concepción del Uruguay  
+**Licenciatura en Sistemas de Información** — Facultad de Ciencia y Tecnología (FCyT), Sede Concepción del Uruguay  
 **Desarrollo de Aplicaciones Móviles — 2026**  
-**Project:** Network Diagnostics Suite (TP6)  
-**Deliverable:** Field Technician Workflow Demonstration Guide  
+**Proyecto:** Network Diagnostics Suite (TP6)  
+**Entregable:** Guía de Demostración del Flujo de Trabajo del Técnico de Campo  
 
 ---
 
-## 1. Overview & Demonstration Goals
+## 1. Resumen y Objetivos de la Demostración
 
-This script guides the evaluator or demonstrator through an end-to-end field technician workflow. It directly satisfies the requirements of **Section 7 of the TP6 specification**:
-1. Discovery of active equipment on the local network (LAN / mDNS).
-2. Live SNMP telemetry query (uptime, system description, interface bandwidth counters).
-3. Remote SSH diagnostic command execution on telecom gear.
-4. QR barcode scanning for equipment inventory and spec catalog lookup.
-5. Technical installation registration with GPS geocoding and labeled photo evidence.
-6. Professional PDF report generation and offline preview.
-7. Offline Outbox queue operation, automatic synchronization upon network recovery, and conflict handling.
+Este guion guía al evaluador o demostrador a través de un flujo de trabajo integral de un técnico de telecomunicaciones en campo. Cumple directamente con los requisitos de la **Sección 7 del enunciado del TP6**:
+1. Descubrimiento de equipos activos en la red local (LAN / mDNS).
+2. Consulta de telemetría SNMP en vivo (tiempo de actividad, descripción del sistema, contadores de ancho de banda en interfaces).
+3. Ejecución de comandos de diagnóstico remoto vía SSH sobre equipamiento de telecomunicaciones.
+4. Escaneo de códigos QR/barras para inventario y consulta de ficha técnica.
+5. Registro de instalación técnica con georreferenciación GPS y evidencia fotográfica etiquetada.
+6. Generación de reporte profesional en PDF y previsualización sin conexión.
+7. Operación con cola de sincronización fuera de línea (Outbox), sincronización automática al recuperar conectividad y resolución de conflictos.
 
 ---
 
-## 2. Environment Setup
+## 2. Configuración del Entorno
 
-### 2.1 Start the Sync Backend Stub
-In a terminal, start the minimal synchronization backend:
+### 2.1 Iniciar el Servidor Stub de Sincronización
+En una terminal, iniciar el backend mínimo de sincronización:
 ```bash
 cd tp_6/backend
 npm install
 npm start
 ```
-*Console output:* `[Sync Server] Listening on http://0.0.0.0:3000`
+*Salida en consola:* `[Sync Server] Listening on http://0.0.0.0:3000`
 
-### 2.2 Start Metro Bundler & Launch the App
-In a second terminal:
+### 2.2 Iniciar Metro Bundler y Ejecutar la Aplicación
+En una segunda terminal:
 ```bash
 cd tp_6/app
 npm start
 ```
-Run on an Android device or emulator with network bridging:
+Ejecutar en un dispositivo Android físico o en un emulador con puente de red local:
 ```bash
 npm run android
-# Or install the generated APK directly:
+# O instalar el APK generado directamente:
 adb install android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-## 3. Step-by-Step Field Technician Walkthrough
+## 3. Recorrido Paso a Paso del Técnico de Campo
 
-### Scene 1: Dashboard & Initial Telemetry (Tab: "Inicio")
-- **Action:** Open the app.
-- **Visuals:** Observe the dark telemetry theme (`#071425`), status header with site picker ("Sitio: Nodo Centro"), and real-time connectivity badge ("Modo Offline / Online").
-- **Key Elements:**
-  - Status summary metrics (Equipos Activos: `8`, Alertas Críticas: `1`, Pendientes Sync: `2`, Enlaces Operativos: `4`).
-  - Active Alert card ("Baja Potencia Óptica - Nodo Centro ONT-03").
-  - Quick action buttons: **Escanear Red**, **Nueva Instalación**, **Consola SSH**, **Sincronizar**.
-
----
-
-### Scene 2: Local Network Discovery (Tab: "Red")
-- **Action:** Tap the **Red** tab or the "Escanear Red" action button.
-- **Execution:**
-  1. The top card shows the detected local IP (`192.168.1.100/24`) and gateway (`192.168.1.1`).
-  2. Tap **"Iniciar Escaneo"**.
-  3. The animated progress bar advances as the `DiscoveryEngine` coordinates concurrent TCP port sweeps (`22`, `80`, `443`, `8291`) and mDNS listeners.
-  4. Active devices populate the list with vendor badges, IP addresses, open ports, and response latencies.
-- **Talking Point:** Explain that Android 10+ restricts direct ARP table scraping, so our suite uses TCP/UDP port probing and SNMP `ifPhysAddress` queries to determine active equipment identity.
+### Escena 1: Panel Principal y Telemetría Inicial (Pestaña: "Inicio")
+- **Acción:** Abrir la aplicación.
+- **Elementos visuales:** Observar el tema oscuro de telemetría (`#071425`), el encabezado de estado con selector de sitio ("Sitio: Nodo Centro") y el distintivo de conectividad en tiempo real ("Modo Offline / Online").
+- **Métricas clave:**
+  - Métricas de resumen de estado (Equipos Activos: `8`, Alertas Críticas: `1`, Pendientes Sync: `2`, Enlaces Operativos: `4`).
+  - Tarjeta de Alerta Activa ("Baja Potencia Óptica - Nodo Centro ONT-03").
+  - Botones de acción rápida: **Escanear Red**, **Nueva Instalación**, **Consola SSH**, **Sincronizar**.
 
 ---
 
-### Scene 3: Live SNMP Telemetry Query (Screen: "Detalle de Equipo")
-- **Action:** Tap on any router/ONT in the list (e.g., `192.168.1.1 - Router Principal MikroTik`).
-- **Execution:**
-  1. The screen loads device metadata and opens the **SNMP Telemetría** tab.
-  2. Tap **"Consultar Telemetría SNMP"**.
-  3. The pure TypeScript ASN.1 / BER codec builds an SNMPv2c `GetRequest` packet and transmits it over UDP port 161.
-  4. The device response updates the UI in real time:
+### Escena 2: Descubrimiento en Red Local (Pestaña: "Red")
+- **Acción:** Tocar la pestaña **Red** o el botón de acción rápida "Escanear Red".
+- **Ejecución:**
+  1. La tarjeta superior muestra la IP local detectada (`192.168.1.100/24`) y la puerta de enlace (`192.168.1.1`).
+  2. Tocar **"Iniciar Escaneo"**.
+  3. La barra de progreso animada avanza mientras el motor `DiscoveryEngine` coordina barridos concurrentes de puertos TCP (`22`, `80`, `443`, `8291`) y escuchas mDNS.
+  4. Los dispositivos activos se listan con distintivos del fabricante, direcciones IP, puertos abiertos y latencia de respuesta.
+- **Punto técnico a destacar:** Explicar que Android 10+ restringe la lectura directa de la tabla ARP del sistema, por lo que la suite utiliza sondeo de puertos TCP/UDP y consultas SNMP a `ifPhysAddress` para determinar la identidad de los equipos activos.
+
+---
+
+### Escena 3: Consulta de Telemetría SNMP en Vivo (Pantalla: "Detalle de Equipo")
+- **Acción:** Seleccionar cualquier router u ONT de la lista (por ejemplo, `192.168.1.1 - Router Principal MikroTik`).
+- **Ejecución:**
+  1. La pantalla carga los metadatos del equipo y abre la pestaña **SNMP Telemetría**.
+  2. Tocar **"Consultar Telemetría SNMP"**.
+  3. El códec ASN.1 / BER implementado en TypeScript puro construye un paquete SNMPv2c `GetRequest` y lo transmite por el puerto UDP 161.
+  4. La respuesta del equipo actualiza la interfaz en tiempo real:
      - **sysDescr:** `RouterOS v7.14 (hAP ac2)`
      - **sysUpTime:** `14d 06h 22m`
      - **sysName:** `RTR-CENTRO-01`
-     - **ifInOctets / ifOutOctets:** Live bandwidth counters and interface status badges.
-- **Talking Point:** Highlight that the SNMP BER codec is written in 100% pure TypeScript without external native C/Java SNMP libraries.
+     - **ifInOctets / ifOutOctets:** Contadores de ancho de banda e indicadores de estado de interfaces en vivo.
+- **Punto técnico a destacar:** Resaltar que el códec BER de SNMP está desarrollado al 100% en TypeScript puro, sin depender de librerías nativas externas de C o Java.
 
 ---
 
-### Scene 4: Remote SSH Diagnostic Console (Screen: "Consola SSH")
-- **Action:** Navigate to **Ajustes** $\rightarrow$ **Gestión de Credenciales** $\rightarrow$ select an equipment profile, then open **Consola SSH**.
-- **Execution:**
-  1. The terminal displays the connected device prompt: `admin@192.168.1.1:22`.
-  2. Tap the **Vendor Presets** toolbar (e.g., MikroTik):
-     - Tap `/system resource print`: The terminal renders CPU load, free memory, and firmware version.
-     - Tap `/interface print stats`: Live packet and error counters appear in the terminal window.
-  3. Tap **"Guardar en Diagnósticos"**: Saves the output directly into SQLite for offline reference.
-- **Talking Point:** Emphasize that passwords and SSH private keys are stored exclusively in the **Android Hardware Keystore** via `react-native-keychain` and never touch SQLite.
+### Escena 4: Consola de Diagnóstico Remoto SSH (Pantalla: "Consola SSH")
+- **Acción:** Navegar a **Ajustes** $\rightarrow$ **Gestión de Credenciales** $\rightarrow$ seleccionar un perfil de equipo y abrir la **Consola SSH**.
+- **Ejecución:**
+  1. La terminal muestra el indicador del dispositivo conectado: `admin@192.168.1.1:22`.
+  2. Utilizar la barra de herramientas de comandos predefinidos por fabricante (ejemplo: MikroTik):
+     - Tocar `/system resource print`: La terminal muestra la carga de CPU, memoria libre y versión de firmware.
+     - Tocar `/interface print stats`: Se visualizan los contadores de paquetes y errores en tiempo real.
+  3. Tocar **"Guardar en Diagnósticos"**: Almacena la salida directamente en SQLite para consulta fuera de línea.
+- **Punto técnico a destacar:** Enfatizar que las contraseñas y claves privadas SSH se resguardan exclusivamente en el **Android Hardware Keystore** mediante `react-native-keychain` y nunca se almacenan en SQLite ni en texto plano.
 
 ---
 
-### Scene 5: QR Barcode Equipment Identification (Screen: "Escaneo QR")
-- **Action:** Tap the floating QR icon or access via **Nueva Instalación** $\rightarrow$ "Escanear QR".
-- **Execution:**
-  1. The camera opens with a neon scan target overlay.
-  2. Scan a device barcode, or tap **"Ingresar Código Manualmente"** and submit: `HUAW-ONT-HG8245H-9921`.
-  3. The `DeviceSheetCache` matches the device against the embedded offline catalog, rendering the full technical spec card:
+### Escena 5: Identificación de Equipos por Código QR (Pantalla: "Escaneo QR")
+- **Acción:** Tocar el icono flotante de QR o ingresar mediante **Nueva Instalación** $\rightarrow$ "Escanear QR".
+- **Ejecución:**
+  1. La cámara se inicia con una mira de escaneo superpuesta.
+  2. Escanear el código del equipo o tocar **"Ingresar Código Manualmente"** e ingresar: `HUAW-ONT-HG8245H-9921`.
+  3. `DeviceSheetCache` contrasta el código con el catálogo fuera de línea y despliega la ficha técnica completa:
      - **Modelo:** Huawei EchoLife HG8245H GPON ONT
      - **Puertos:** 4 GE + 2 POTS + Wi-Fi b/g/n
      - **Rango Óptico Óptimo:** -8 dBm a -27 dBm
-  4. Tap **"Iniciar Instalación con este Equipo"**.
+  4. Tocar **"Iniciar Instalación con este Equipo"**.
 
 ---
 
-### Scene 6: Technical Installation Wizard (Tab: "Instala." $\rightarrow$ "Nueva Instalación")
-- **Action:** Proceed through the 4-step wizard:
-  1. **Paso 1: Identificación:** Select Sitio ("Nodo Centro") and Device ("Huawei EchoLife HG8245H"). Tap **"Siguiente: Evidencia"**.
+### Escena 6: Asistente Técnico de Instalación (Pestaña: "Instala." $\rightarrow$ "Nueva Instalación")
+- **Acción:** Completar el asistente de 4 pasos:
+  1. **Paso 1: Identificación:** Seleccionar el Sitio ("Nodo Centro") y el Equipo ("Huawei EchoLife HG8245H"). Tocar **"Siguiente: Evidencia"**.
   2. **Paso 2: Evidencia de Campo:**
-     - Tap **"Capturar Gabinete"**: An evidence photo is captured and badged with GPS coordinates (`-32.4825, -58.2321`) and timestamp.
-     - Tap **"Capturar Empalme Óptico"**: Captures internal fiber tray evidence.
-     - Tap **"Capturar Nivel de Señal"**: Captures power meter reading.
-     - Tap **"Siguiente: Notas"**.
+     - Tocar **"Capturar Gabinete"**: Se toma la fotografía de evidencia y se etiqueta con coordenadas GPS (`-32.4825, -58.2321`) y marca de tiempo.
+     - Tocar **"Capturar Empalme Óptico"**: Captura la bandeja interna de fibra.
+     - Tocar **"Capturar Nivel de Señal"**: Captura la lectura del medidor de potencia.
+     - Tocar **"Siguiente: Notas"**.
   3. **Paso 3: Notas Técnicas:**
      - Ingresar Técnico: `Téc. M. Gómez`.
      - Potencia Óptica: `-19.4 dBm`.
      - Relación Señal/Ruido (SNR): `32.5 dB`.
      - Observaciones: `Instalación completada con conector SC/APC verde. Pérdida óptica dentro de la norma técnica.`.
-     - Tap **"Siguiente: Revisión"**.
+     - Tocar **"Siguiente: Revisión"**.
   4. **Paso 4: Revisión y Cierre:**
-     - Review the structured summary card.
-     - Tap **"Finalizar y Generar Reporte PDF"**.
-- **Visuals:** The app compiles the report, persists the installation to SQLite, inserts a sync task into the Outbox queue, and navigates directly to the PDF preview screen.
+     - Revisar el resumen estructurado de la instalación.
+     - Tocar **"Finalizar y Generar Reporte PDF"**.
+- **Resultado visual:** La aplicación compila el reporte, almacena la instalación en SQLite, encola la tarea en la cola Outbox y navega a la pantalla de vista previa del PDF.
 
 ---
 
-### Scene 7: PDF Report Generation & Offline Preview (Screen: "Visor de Reporte PDF")
-- **Action:** Inspect the generated engineering document on screen.
-- **Visuals:**
-  - High-density, professional white-sheet layout with telecom header branding.
-  - Document verification UUID and QR stamp.
-  - Equipment hardware specifications table.
-  - Optical telemetry badges (Rx Power: `-19.4 dBm`, SNR: `32.5 dB`).
-  - Two-column labeled photo evidence grid with geocoding overlays.
-  - Status pill: **"En cola para sincronizar"** (offline).
-  - Floating action buttons: **Compartir** and **Descargar**.
+### Escena 7: Generación de Reporte PDF y Vista Previa Offline (Pantalla: "Visor de Reporte PDF")
+- **Acción:** Inspeccionar en pantalla el documento técnico generado.
+- **Elementos visuales:**
+  - Diseño profesional en formato de hoja técnica blanca con cabecera de telecomunicaciones.
+  - UUID único de verificación del documento y sello QR.
+  - Tabla de especificaciones técnicas del hardware.
+  - Indicadores de telemetría óptica (Potencia Rx: `-19.4 dBm`, SNR: `32.5 dB`).
+  - Matriz fotográfica de evidencia a dos columnas con coordenadas y fecha superpuestas.
+  - Estado de sincronización: **"En cola para sincronizar"** (modo sin conexión).
+  - Botones de acción flotantes: **Compartir** y **Descargar**.
 
 ---
 
-### Scene 8: Offline Outbox & Network Recovery Sync (Screen: "Cola de Sincronización")
-- **Action:** Put the mobile device/emulator in Airplane Mode (Offline).
-- **Execution:**
-  1. Navigate to **Ajustes** $\rightarrow$ **Cola de Sincronización (Outbox)**.
-  2. Observe the persistent yellow warning banner: `"Sin conexión a internet. Los cambios se guardan localmente y se sincronizarán automáticamente al reconectar."`
-  3. The list shows the pending installation report with status pill `PENDIENTE`.
-  4. **Restore Network Connectivity** (Disable Airplane Mode).
-  5. The `@react-native-community/netinfo` listener detects network restoration.
-  6. The `SyncWorker` triggers immediately:
-     - The item status transitions from `PENDIENTE` $\rightarrow$ `SINCRONIZANDO` $\rightarrow$ `SINCRONIZADO` (green badge).
-  7. Check the backend terminal: observe `[Sync Server] Batch sync received: 1 items processed successfully.`
+### Escena 8: Cola Outbox y Sincronización al Recuperar Conectividad (Pantalla: "Cola de Sincronización")
+- **Acción:** Activar el Modo Avión en el dispositivo o emulador (sin conexión).
+- **Ejecución:**
+  1. Navegar a **Ajustes** $\rightarrow$ **Cola de Sincronización (Outbox)**.
+  2. Observar el banner amarillo persistente: `"Sin conexión a internet. Los cambios se guardan localmente y se sincronizarán automáticamente al reconectar."`
+  3. El listado muestra el reporte de instalación pendiente con estado `PENDIENTE`.
+  4. **Restablecer la Conectividad** (Desactivar Modo Avión).
+  5. El observador `@react-native-community/netinfo` detecta la disponibilidad de red.
+  6. El componente `SyncWorker` se activa de forma automática:
+     - El estado del elemento transiciona de `PENDIENTE` $\rightarrow$ `SINCRONIZANDO` $\rightarrow$ `SINCRONIZADO` (indicador verde).
+  7. Verificar la terminal del backend: se observa `[Sync Server] Batch sync received: 1 items processed successfully.`
 
 ---
 
-### Scene 9: Sync Conflict Resolution (Screen: "Resolución de Conflictos")
-- **Action:** Trigger a conflict simulation.
-- **Execution:**
-  1. Tap **"Simular Conflicto (409)"** in the sync queue screen.
-  2. The server responds with HTTP 409 Conflict.
-  3. The outbox item updates to `CONFLICTO` with an alert icon.
-  4. Tap the item to open **SyncConflictScreen**:
-     - Left column: **Versión Local** (Technician's latest field edits).
-     - Right column: **Versión del Servidor** (Conflicting central database entry).
-     - Tap **"Mantener mi versión"**: Forces overwrite with local data.
-     - The conflict is marked resolved, and the queue successfully synchronizes.
+### Escena 9: Resolución de Conflictos de Sincronización (Pantalla: "Resolución de Conflictos")
+- **Acción:** Ejecutar una simulación de conflicto.
+- **Ejecución:**
+  1. Tocar **"Simular Conflicto (409)"** en la pantalla de la cola de sincronización.
+  2. El servidor responde con HTTP 409 Conflict.
+  3. El elemento de la cola cambia su estado a `CONFLICTO` con icono de advertencia.
+  4. Tocar el elemento para abrir la pantalla **SyncConflictScreen**:
+     - Columna izquierda: **Versión Local** (Modificaciones recientes del técnico en campo).
+     - Columna derecha: **Versión del Servidor** (Registro en conflicto en la base de datos central).
+     - Tocar **"Mantener mi versión"**: Fuerza la sobrescritura con la información local.
+     - El conflicto queda resuelto y la cola se sincroniza con éxito.
 
 ---
 
-### Scene 10: Diagnostic & Installation History (Tab: "Historial")
-- **Action:** Tap the **Historial** tab.
-- **Execution:**
-  1. The screen loads all historical diagnostics and installations directly from SQLite (100% offline).
-  2. Test the filter chips: **Todos**, **SNMP**, **SSH**, **Instalación**.
-  3. Type in the search bar: `Huawei` or `192.168.1.1` to filter items in real time.
-  4. Tap an installation record to re-open its generated PDF report preview.
+### Escena 10: Historial de Diagnósticos e Instalaciones (Pestaña: "Historial")
+- **Acción:** Tocar la pestaña **Historial**.
+- **Ejecución:**
+  1. La pantalla carga todos los registros históricos de diagnósticos e instalaciones directamente desde SQLite (100% fuera de línea).
+  2. Probar los filtros por categoría: **Todos**, **SNMP**, **SSH**, **Instalación**.
+  3. Utilizar la barra de búsqueda ingresando `Huawei` o `192.168.1.1` para filtrar elementos al instante.
+  4. Seleccionar un registro de instalación para volver a abrir la vista previa de su reporte PDF generado.
 
 ---
 
-## 4. Summary of Verification Proofs
+## 4. Cuadro Resumen de Evidencias de Evaluación
 
-| Feature | Demonstration Proof |
+| Funcionalidad | Evidencia Demostrada |
 |---|---|
-| LAN Discovery | Interactive sweep on subnet, active host list with open telecom ports |
-| SNMP Protocol | Pure TypeScript BER codec querying MIB-II OIDs over raw UDP/161 |
-| SSH Console | Vendor command presets (MikroTik, Cisco, Huawei) with live terminal execution |
-| Hardware Security | Android Keystore isolation via Keychain, zero plaintext credentials in DB |
-| Field Evidence | Real-time QR spec resolution, GPS coordinate geocoding, photo grid |
-| PDF Reporting | Engineering white-sheet document with verification UUID generated on-device |
-| Offline Outbox | Outbox pattern with exponential backoff, NetInfo auto-trigger, 409 resolution |
-| Offline History | Instant SQLite query with date grouping and multi-category filtering |
+| Descubrimiento LAN | Barrido interactivo sobre subred con listado de equipos activos y puertos abiertos |
+| Protocolo SNMP | Códec BER puro en TypeScript consultando OIDs de MIB-II vía sockets UDP/161 |
+| Consola SSH | Presets de comandos por fabricante (MikroTik, Cisco, Huawei) con ejecución en vivo |
+| Seguridad por Hardware | Aislamiento en Android Keystore vía Keychain, sin contraseñas en texto plano en la BD |
+| Evidencia de Campo | Resolución de fichas técnicas por QR, georreferenciación GPS y matriz fotográfica |
+| Reportes en PDF | Documento técnico formal con UUID de verificación generado en el dispositivo |
+| Cola Offline Outbox | Patrón Outbox con backoff exponencial, detección por NetInfo y resolución de conflictos 409 |
+| Historial Local | Consultas directas sobre SQLite con agrupación por fecha y filtrado multicategoría |

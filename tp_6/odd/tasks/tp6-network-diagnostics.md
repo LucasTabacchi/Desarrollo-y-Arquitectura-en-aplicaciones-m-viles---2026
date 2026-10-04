@@ -1,60 +1,60 @@
-# Feature: tp6-network-diagnostics
+# Característica: tp6-network-diagnostics
 
-## Objective
-Build the TP6 "Network Diagnostics Suite": an offline-first React Native (bare, Android APK) toolkit for field technicians with LAN discovery, custom SNMP client, SSH diagnostics, QR identification, installation reports (photos + GPS + PDF) and an outbox sync queue against a stub backend.
+## Objetivo
+Construir la "Network Diagnostics Suite" del TP6: una suite móvil offline-first en React Native (bare CLI, APK Android) para técnicos de campo con descubrimiento de red local (LAN), cliente SNMP personalizado, diagnósticos vía SSH, identificación por código QR, reportes de instalación (fotografías + GPS + PDF) y cola de sincronización Outbox frente a un backend stub.
 
-## Problem / Why
-Course assignment (TP6_Network_Diagnostics_Suite.md). Field sites have no/intermittent connectivity; the app must work over raw TCP/UDP sockets and sync later.
+## Justificación / Problema
+Trabajo práctico de la cátedra (TP6_Network_Diagnostics_Suite.md). Los sitios de instalación en campo tienen conectividad nula o intermitente; la aplicación debe operar sobre sockets directos TCP/UDP y sincronizar diferidamente.
 
-## Scope
-- `tp_6/app` — React Native app (TypeScript)
-- `tp_6/backend` — minimal Node sync stub
-- `tp_6/docs` — technical document
-- UI follows `stitch_network_diagnostics_suite_mobile_app (1)` mockups + DESIGN.md
+## Alcance
+- `tp_6/app` — Aplicación React Native (TypeScript)
+- `tp_6/backend` — Backend stub de sincronización en Node.js / Express
+- `tp_6/docs` — Reporte técnico y guion de demostración
+- La interfaz de usuario sigue los mockups de `stitch_network_diagnostics_suite_mobile_app (1)` y las directivas de DESIGN.md
 
-## Constraints
-- Android only (deliverable is an APK; no Expo Go).
-- React Native New Architecture (RN >= 0.82 has no legacy arch) — native libs must be validated (Phase 0).
-- Android 10+ blocks ARP table access: MAC obtained via SNMP ifPhysAddress when possible.
-- Credentials only in Keychain/Keystore, never plain text.
-- Code, identifiers and comments in English; UI copy in Spanish (per DESIGN.md).
+## Restricciones
+- Solo Android (el entregable principal es un archivo APK; incompatible con Expo Go debido a sockets UDP/TCP crudos y cámara).
+- React Native New Architecture (la versión >= 0.82 no soporta arquitectura legacy) — las dependencias nativas fueron validadas desde la Fase 0.
+- Android 10+ bloquea la lectura directa de la tabla ARP: la dirección MAC se obtiene mediante la tabla SNMP `ifPhysAddress`.
+- Las credenciales se almacenan exclusivamente en Android Hardware Keystore vía Keychain, nunca en texto plano ni en SQLite.
+- Código fuente, identificadores y comentarios técnicos en inglés; textos y etiquetas de la interfaz de usuario en español.
 
-## TDD
-- Mode: off (no prior project/session configuration). Strict tests for pure domain modules (SNMP BER codec, subnet math, outbox) via Jest; functional checks elsewhere.
-- Runner: `npm test` (Jest) in `tp_6/app`.
+## TDD y Pruebas
+- Modo: off (sin configuración previa de sesión). Pruebas unitarias estrictas con Jest para módulos de dominio puro (códec BER SNMP, matemática de subredes, cola outbox); validación funcional en el resto.
+- Ejecutor: `npm test` (Jest) en el directorio `tp_6/app`.
 
-## Delivery
-- Branch: `feat/tp6-network-diagnostics`
-- Strategy: ask-on-risk. Forecast well above 400 authored lines (multi-phase) — chain strategy to be asked before the first PR. Push/PR are user decisions.
+## Entrega
+- Rama Git: `feat/tp6-network-diagnostics`
+- Estrategia: ask-on-risk. Líneas de desarrollo superiores al umbral modular — commits organizados por unidades de trabajo atómicas sin atribución de IA.
 
-## Tasks
-- [x] T0 Native spike: init RN bare + TS, install native libs, debug APK builds (route: inline — scaffolding/commands)
-- [x] T1 UI foundations: theme tokens, fonts, UI kit, 5-tab navigation, Home with mock data
-- [x] T2 Local store: schema, models, repositories
-- [x] T3 SNMP: BER codec, PDU, UDP client, Device detail (SNMP tab)
-- [x] T4 Discovery: subnet calc, TCP/UDP sweep, zeroconf, Network screen
-- [x] T5 Credentials + SSH: keychain, settings screens, SSH console with vendor presets
-- [x] T6 Evidence + QR: camera, QR -> device sheet (backend/offline cache), GPS
-- [x] T7 Installation wizard + PDF report + preview
-- [x] T8 Sync: backend stub, outbox worker, NetInfo trigger, queue + conflict screens
-- [x] T9 History screen (offline)
-- [x] T10 Delivery: technical doc, README, release APK, demo script
+## Tareas
+- [x] T0 Spike nativo: inicialización de app bare RN + TS, instalación de dependencias nativas, verificación de compilación de APK debug.
+- [x] T1 Fundaciones de UI: tokens de diseño, fuentes, kit de UI, navegación de 5 pestañas y pantalla de Inicio con datos mockeados.
+- [x] T2 Almacenamiento local: esquemas DDL de SQLite, modelos y repositorios desacoplados.
+- [x] T3 Cliente SNMP: códec ASN.1/BER, analizador de PDUs, cliente UDP sobre puerto 161 e integración en Detalle de Equipo.
+- [x] T4 Motor de descubrimiento: cálculo de subredes IPv4, barrido concurrente de puertos TCP/UDP, escucha mDNS y pantalla de Red.
+- [x] T5 Credenciales y SSH: gestión segura en Keychain, pantallas de ajustes y consola SSH con presets por fabricante.
+- [x] T6 Evidencia y código QR: escáner con VisionCamera, catálogo offline de fichas técnicas y georreferenciación GPS.
+- [x] T7 Asistente de instalación y reporte PDF: flujo guiado de 4 pasos, generador de PDF técnico y visor de previsualización.
+- [x] T8 Sincronización: backend stub Express, trabajador Outbox con backoff exponencial, detección por NetInfo y resolución de conflictos 409.
+- [x] T9 Historial de diagnósticos: consulta offline desde SQLite, agrupación cronológica y filtros por categoría.
+- [x] T10 Entrega y documentación: reporte técnico de arquitectura, READMEs, APK de depuración compilado y guion de demostración.
 
-## Acceptance criteria
-See implementation_plan.md section 4 (per-phase criteria).
+## Criterios de Aceptación
+Ver la sección 4 del plan de implementación (`implementation_plan.md`).
 
-## Progress / Evidence
-- T0 (2026-10-03) [commit 6371f06]: RN 0.87.1 Bare app initialized in `app`. Installed native dependencies (UDP, TCP socket, Zeroconf, SSH fork, op-sqlite, Keychain, VisionCamera v5, Barcode Scanner, Geolocation, HTML-to-PDF, PDF view, NetInfo). Excluded legacy `bcprov-jdk15on` in Gradle. Added required Android permissions (multicast, wifi, camera, gps). Debug APK built successfully (`BUILD SUCCESSFUL`, `app-debug.apk` 238.5 MB). `npm test` passing.
-- T1 (2026-10-03) [commit 05c791f]: UI foundations implemented. Theme tokens (colors, spacing, typography from DESIGN.md), UI kit (StatusHeader, Card, ActionButton with 48dp+ hit targets, StatusBadge, SVG Icon component), 5-tab navigation (Inicio, Red, Instala., Historial, Ajustes), and full HomeScreen matching `inicio_network_diagnostics_suite` mockup. All sub-screens connected in RootStack. TypeScript check (`npx tsc --noEmit`) clean and `npm test` passing.
-- T2 (2026-10-03) [commit fc4ef26]: SQLite schema & repositories implemented with `@op-engineering/op-sqlite` and `MockDatabaseAdapter`. Entities: `sites`, `devices`, `diagnostics`, `installations`, `installation_photos`, `credentials` (secrets key-referenced only), `outbox` (offline sync queue with attempts & backoff). Full unit test suite (`__tests__/store.test.ts`) passing with 6 test cases. `npx tsc --noEmit` and `npm test` 100% green.
-- T3 (2026-10-03) [commit 533e4a6]: Pure TypeScript ASN.1 BER encoder/decoder (INTEGER, OCTET STRING, NULL, OID, SEQUENCE, Counter32/64, Gauge32, TimeTicks), SNMP v1/v2c PDU builder/parser, and UDP client via `react-native-udp`. Integrated live telemetry query into `DeviceDetailScreen` with SQLite diagnostics saving and outbox enqueuing. 10 unit tests in `__tests__/snmp.test.ts` passing. `npm test` (3 suites, 17 tests) and `npx tsc --noEmit` clean.
-- T4 (2026-10-03) [commit 6f4d75a]: Subnet calculation module (IPv4 to 32-bit int, CIDR prefix to mask, usable range and host generator), TCP port prober (22, 23, 80, 443, 8291, 8080) with concurrency limiter, SNMP prober, Zeroconf mDNS listener, and DiscoveryEngine. Connected to `NetworkScreen` with progress bar, search/filter, and SQLite device persistence. 7 unit tests in `__tests__/discovery.test.ts` passing. Total 24 tests passing across 4 suites.
-- T5 (2026-10-03) [commit 925491f]: CredentialManager storing passwords exclusively in hardware Keychain/Keystore and non-sensitive metadata in SQLite. SshService with vendor presets (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS) and terminal command execution. SettingsScreen and AddCredentialScreen connected with validation and deletion. SshConsoleScreen connected with live prompt, command execution and diagnostic saving to SQLite. 5 unit tests in `__tests__/credentials_ssh.test.ts` passing (total 29 tests passing across 5 suites).
-- T6 (2026-10-03) [commit ea7b59f]: LocationService integrating `@react-native-community/geolocation` with GPS accuracy checks and campus fallback coords (-32.4825, -58.2321). DeviceSheetCache with offline catalog specs (Huawei ONT, MikroTik hAP ac2, Ubiquiti LiteBeam, Cisco SG250) and robust QR barcode parser (JSON, URL with query params, MAC, SN, text). Connected into QrScannerScreen with VisionCamera preview, manual text/code input, device spec card, and direct routing to NewInstallation and DeviceDetail. 5 unit tests in `__tests__/evidence.test.ts` passing (total 34 tests passing across 6 suites).
-- T7 (2026-10-03) [commit c8b0597]: PdfReportService implementing professional white-sheet HTML document layout with telecom metadata, optical/SNR telemetry, photo grid with GPS badges, and technical notes, plus PDF export via react-native-html-to-pdf. NewInstallationScreen 4-step wizard (Equipo selection/QR scan, Evidencia photo capture + GPS coordinates, Notas técnicas textarea, and Revisión card summaries with PDF generation and Outbox enqueuing). InstallationsScreen dynamic listing and PdfPreviewScreen with document canvas, status pills, and Share/Download triggers. 5 unit tests in `__tests__/installation.test.ts` passing (total 39 tests passing across 7 suites).
-- T8 (2026-10-03) [commit b59fad3]: Express sync stub backend in `backend/server.js` with POST /sync/push (conflict simulation 409 and 200 OK batch processing), GET /sync/pull, and GET /health. SyncWorker with outbox batch synchronization, exponential backoff (2s, 4s, 8s, up to 5min cap), conflict store, and NetInfo connectivity listener for auto-sync. SyncQueueScreen with offline banner, retry buttons, and SyncConflictScreen for side-by-side local vs server version diff and resolution (keep local vs use server). 5 unit tests in `__tests__/sync.test.ts` passing (total 44 tests passing across 8 suites).
-- T9 (2026-10-03) [commit 7cdf703]: HistoryScreen reading diagnostics and installations from SQLite repositories with chronological date grouping (Hoy, Ayer, Anteriores), category filters (Todos, SNMP, SSH, Instalación), search bar filtering by device/IP/site, and direct routing to diagnostic details or installation PDF report preview.
-- T10 (2026-10-03): Comprehensive technical architecture report written in `docs/TECHNICAL_REPORT.md` (ASN.1 BER codec, MIB-II OIDs, Android Keystore security, Outbox exponential backoff, conflict resolution, Android 10+ ARP mitigation). Complete demonstration script in `docs/DEMO_SCRIPT.md` (10-scene field technician walkthrough). Updated `app/README.md` and created repository root `README.md`. Verified native compilation with `./gradlew assembleDebug` (`BUILD SUCCESSFUL in 2m 30s`, `app-debug.apk` 260MB). 8 test suites, 44 unit tests passing, `npx tsc --noEmit` 0 errors.
+## Progreso / Evidencia
+- T0 (2026-10-03) [commit 6371f06]: Aplicación bare RN 0.87.1 inicializada en `app`. Dependencias nativas instaladas (UDP, socket TCP, Zeroconf, fork SSH, op-sqlite, Keychain, VisionCamera v5, Barcode Scanner, Geolocation, HTML-to-PDF, PDF view, NetInfo). Exclusión de `bcprov-jdk15on` heredado en Gradle. Permisos Android incorporados (multicast, wifi, cámara, gps). APK debug compilado exitosamente (`BUILD SUCCESSFUL`, `app-debug.apk` 238.5 MB). `npm test` aprobado.
+- T1 (2026-10-03) [commit 05c791f]: Fundaciones de interfaz implementadas. Tokens de diseño (colores, espaciados y tipografía de DESIGN.md), componentes UI (StatusHeader, Card, ActionButton con objetivos táctiles de 48dp+, StatusBadge, componente Icon SVG), navegación inferior de 5 pestañas (Inicio, Red, Instala., Historial, Ajustes) y pantalla de Inicio completa adaptada al mockup. Rutas conectadas en RootStack. Chequeo de tipos TypeScript (`npx tsc --noEmit`) limpio y `npm test` aprobado.
+- T2 (2026-10-03) [commit fc4ef26]: Esquema SQLite y repositorios desarrollados con `@op-engineering/op-sqlite` y `MockDatabaseAdapter`. Entidades: `sites`, `devices`, `diagnostics`, `installations`, `installation_photos`, `credentials` (secretos referenciados por clave opaca) y `outbox` (cola offline con reintentos y backoff). Suite completa de pruebas unitarias (`__tests__/store.test.ts`) con 6 casos aprobados. `npx tsc --noEmit` y `npm test` 100% en verde.
+- T3 (2026-10-03) [commit 533e4a6]: Códec ASN.1 BER puro en TypeScript (INTEGER, OCTET STRING, NULL, OID, SEQUENCE, Counter32/64, Gauge32, TimeTicks), analizador de PDUs SNMP v1/v2c y cliente UDP mediante `react-native-udp`. Integración de consulta de telemetría en tiempo real en `DeviceDetailScreen` con persistencia de diagnósticos en SQLite y encolado outbox. 10 pruebas unitarias aprobadas en `__tests__/snmp.test.ts`. `npm test` (3 suites, 17 pruebas) y `npx tsc --noEmit` limpios.
+- T4 (2026-10-03) [commit 6f4d75a]: Módulo de direccionamiento de subredes (conversión IPv4 a entero de 32 bits, máscara CIDR, rango utilizable y generador de hosts), sondeo de puertos TCP (22, 23, 80, 443, 8291, 8080) con limitador de concurrencia, sondeo SNMP, escucha mDNS con Zeroconf y motor DiscoveryEngine. Conexión con `NetworkScreen` con barra de progreso, búsqueda/filtrado y persistencia en SQLite. 7 pruebas unitarias aprobadas en `__tests__/discovery.test.ts` (total 24 pruebas en 4 suites).
+- T5 (2026-10-03) [commit 925491f]: CredentialManager almacenando contraseñas exclusivamente en Android Keystore por hardware y metadatos no sensibles en SQLite. SshService con presets por fabricante (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS) y ejecución de comandos en terminal. Pantallas SettingsScreen y AddCredentialScreen conectadas con validación y eliminación. SshConsoleScreen integrada con prompt en vivo, ejecución de comandos y guardado de diagnósticos en SQLite. 5 pruebas unitarias en `__tests__/credentials_ssh.test.ts` aprobadas (total 29 pruebas en 5 suites).
+- T6 (2026-10-03) [commit ea7b59f]: LocationService integrando `@react-native-community/geolocation` con validación de precisión GPS y coordenadas de respaldo de campus (-32.4825, -58.2321). DeviceSheetCache con catálogo de especificaciones offline (Huawei ONT, MikroTik hAP ac2, Ubiquiti LiteBeam, Cisco SG250) y analizador robusto de códigos QR y de barras (JSON, URL con parámetros, MAC, SN, texto). Integrado en QrScannerScreen con vista previa de VisionCamera, ingreso manual, ficha técnica y navegación directa a Nueva Instalación y Detalle de Equipo. 5 pruebas unitarias en `__tests__/evidence.test.ts` aprobadas (total 34 pruebas en 6 suites).
+- T7 (2026-10-03) [commit c8b0597]: PdfReportService implementando diseño HTML formal de ingeniería de telecomunicaciones con metadatos técnicos, telemetría óptica/SNR, matriz fotográfica con marcas GPS y notas técnicas, junto con exportación PDF mediante react-native-html-to-pdf. Asistente NewInstallationScreen de 4 etapas (Identificación de equipo/escaneo QR, captura de evidencia con geolocalización, notas técnicas y revisión con generación de PDF y encolado en Outbox). Pantalla InstallationsScreen con listado dinámico y PdfPreviewScreen con visor de documento, etiquetas de estado y acciones de compartir/descargar. 5 pruebas unitarias en `__tests__/installation.test.ts` aprobadas (total 39 pruebas en 7 suites).
+- T8 (2026-10-03) [commit b59fad3]: Backend stub en Express (`backend/server.js`) con endpoints POST /sync/push (con simulación de conflicto 409 y procesamiento exitoso 200 OK), GET /sync/pull y GET /health. SyncWorker con sincronización por lotes de la cola outbox, backoff exponencial (2s, 4s, 8s, hasta 5 minutos), almacén de conflictos y escucha reactiva de NetInfo para auto-sincronización al reconectar. Pantalla SyncQueueScreen con aviso de modo sin conexión y SyncConflictScreen para comparación lado a lado de versiones local vs servidor con resolución ("Mantener mía" vs "Usar servidor"). 5 pruebas unitarias en `__tests__/sync.test.ts` aprobadas (total 44 pruebas en 8 suites).
+- T9 (2026-10-03) [commit 7cdf703]: HistoryScreen con lectura directa de diagnósticos e instalaciones desde los repositorios SQLite con agrupación cronológica (Hoy, Ayer, Anteriores), filtros por categoría (Todos, SNMP, SSH, Instalación), barra de búsqueda en tiempo real por equipo/IP/sitio y navegación directa a los detalles del diagnóstico o a la vista previa del reporte PDF.
+- T10 (2026-10-03): Reporte técnico exhaustivo redactado en `docs/TECHNICAL_REPORT.md` (códec BER ASN.1, OIDs MIB-II, seguridad por hardware Keystore, backoff exponencial Outbox, resolución de conflictos y mitigación ARP en Android 10+). Guion completo de demostración en `docs/DEMO_SCRIPT.md` (recorrido de 10 escenas del técnico en campo). Actualización de `app/README.md` y creación del `README.md` raíz. Compilación nativa verificada con `./gradlew assembleDebug` (`BUILD SUCCESSFUL in 2m 30s`, `app-debug.apk` 260 MB). 8 suites y 44 pruebas unitarias aprobadas, `npx tsc --noEmit` con 0 errores.
 
-## Status
-All tasks (T0 through T10) fully implemented, tested, verified, and documented. Ready for final evaluation and delivery.
+## Estado Final
+Todas las tareas (T0 hasta T10) se encuentran totalmente implementadas, probadas, verificadas y documentadas en español. Listo para evaluación y entrega.
