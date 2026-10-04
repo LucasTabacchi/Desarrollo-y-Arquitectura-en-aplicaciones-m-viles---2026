@@ -17,39 +17,7 @@ import { RootStackParamList } from '../../core/navigation/types';
 import { getRepositories } from '../../store';
 import { Installation } from '../../store/models';
 
-const SAMPLE_INSTALLATIONS: Array<{
-  id: string;
-  deviceName: string;
-  siteName: string;
-  dateStr: string;
-  status: 'synced' | 'pending' | 'conflict';
-  pdfPath: string;
-}> = [
-  {
-    id: 'sample-1',
-    deviceName: 'Router MikroTik hAP ac2',
-    siteName: 'Sitio Azotea Norte',
-    dateStr: '02/10/2026',
-    status: 'pending',
-    pdfPath: 'reporte_mikrotik_hap_ac2.pdf',
-  },
-  {
-    id: 'sample-2',
-    deviceName: 'ONT Huawei HG8245W5',
-    siteName: 'Sitio Azotea Norte',
-    dateStr: '01/10/2026',
-    status: 'synced',
-    pdfPath: 'reporte_ont_huawei_hg8245w5.pdf',
-  },
-  {
-    id: 'sample-3',
-    deviceName: 'Antena Ubiquiti LiteBeam',
-    siteName: 'Sitio Azotea Norte',
-    dateStr: '28/09/2026',
-    status: 'synced',
-    pdfPath: 'reporte_antena_ubiquiti.pdf',
-  },
-];
+
 
 export const InstallationsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -168,54 +136,16 @@ export const InstallationsScreen: React.FC = () => {
             </TouchableOpacity>
           ))}
 
-          {/* Default Sample Items when list is empty or minimal */}
-          {installations.length === 0 &&
-            SAMPLE_INSTALLATIONS.map((sample) => (
-              <TouchableOpacity
-                key={sample.id}
-                activeOpacity={0.8}
-                onPress={() =>
-                  navigation.navigate('PdfPreview', {
-                    filePath: sample.pdfPath,
-                    title: `Reporte de Instalación - ${sample.deviceName}`,
-                  })
-                }
-              >
-                <Card style={styles.itemCard} variant="surface">
-                  <View style={styles.itemTop}>
-                    <View style={styles.deviceRow}>
-                      <View style={styles.iconBox}>
-                        <Icon name="router" size={20} color={colors.primary} />
-                      </View>
-                      <View style={styles.deviceInfo}>
-                        <Text style={styles.deviceName}>{sample.deviceName}</Text>
-                        <Text style={styles.siteInfo}>{sample.siteName}</Text>
-                      </View>
-                    </View>
-                    <StatusBadge
-                      label={sample.status === 'synced' ? 'Sincronizado' : 'Pendiente'}
-                      variant={sample.status === 'synced' ? 'success' : 'warning'}
-                      dot
-                    />
-                  </View>
-
-                  <View style={styles.evidenceRow}>
-                    <View style={styles.evidenceItem}>
-                      <Icon name="place" size={14} color={colors.onSurfaceVariant} />
-                      <Text style={styles.evidenceText}>-32.4825, -58.2372</Text>
-                    </View>
-                    <View style={styles.evidenceItem}>
-                      <Icon name="photo_camera" size={14} color={colors.onSurfaceVariant} />
-                      <Text style={styles.evidenceText}>3 fotos</Text>
-                    </View>
-                    <View style={styles.evidenceItem}>
-                      <Icon name="event" size={14} color={colors.onSurfaceVariant} />
-                      <Text style={styles.evidenceText}>{sample.dateStr}</Text>
-                    </View>
-                  </View>
-                </Card>
-              </TouchableOpacity>
-            ))}
+          {/* Empty State when no installations exist */}
+          {installations.length === 0 && (
+            <Card style={styles.emptyCard} variant="surface">
+              <Icon name="install" size={32} color={colors.muted} />
+              <Text style={styles.emptyTitle}>Sin instalaciones registradas</Text>
+              <Text style={styles.emptySub}>
+                Tocá en "Nueva instalación" para dar de alta un equipo con fotografías y GPS.
+              </Text>
+            </Card>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -298,5 +228,26 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.onSurfaceVariant,
     fontFamily: 'monospace',
+  },
+  emptyCard: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: colors.surfaceStroke,
+    borderRadius: 12,
+  },
+  emptyTitle: {
+    ...typography.bodyMedium,
+    color: colors.onSurface,
+    fontWeight: '700',
+  },
+  emptySub: {
+    ...typography.bodySmall,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

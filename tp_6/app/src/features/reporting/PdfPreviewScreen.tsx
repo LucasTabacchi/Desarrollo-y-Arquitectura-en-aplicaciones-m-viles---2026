@@ -80,7 +80,7 @@ export const PdfPreviewScreen: React.FC = () => {
               <View style={styles.metaRow}>
                 <View style={styles.metaCol}>
                   <Text style={styles.metaLabel}>SITIO</Text>
-                  <Text style={styles.metaVal}>Sitio Azotea Norte</Text>
+                  <Text style={styles.metaVal}>Sitio de Instalación</Text>
                 </View>
                 <View style={styles.metaCol}>
                   <Text style={styles.metaLabel}>FECHA</Text>
@@ -96,7 +96,7 @@ export const PdfPreviewScreen: React.FC = () => {
               <View style={[styles.metaRow, styles.metaRowBorder]}>
                 <View style={styles.metaCol}>
                   <Text style={styles.metaLabel}>TÉCNICO</Text>
-                  <Text style={styles.metaVal}>Carlos Méndez</Text>
+                  <Text style={styles.metaVal}>Técnico de Campo</Text>
                 </View>
                 <View style={styles.metaCol}>
                   <Text style={styles.metaLabel}>ESTADO</Text>

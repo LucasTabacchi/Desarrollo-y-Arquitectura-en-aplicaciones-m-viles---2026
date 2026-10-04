@@ -29,13 +29,13 @@ export const HomeScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Operator Context & Site Identification */}
+        {/* Header de la Suite */}
         <View style={styles.operatorSection}>
-          <Text style={styles.greeting}>Hola, Carlos Méndez</Text>
+          <Text style={styles.greeting}>Suite de Diagnóstico</Text>
 
           <View style={styles.siteBanner}>
-            <Icon name="place" size={18} color={colors.primary} />
-            <Text style={styles.siteText}>Sitio Azotea Norte</Text>
+            <Icon name="radar" size={18} color={colors.primary} />
+            <Text style={styles.siteText}>Operaciones de Red en Campo</Text>
           </View>
         </View>
 
